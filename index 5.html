@@ -1,0 +1,2117 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#141B33">
+<title>Schnellschuss</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Rubik:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<style>
+:root{
+  --bg:#141B33; --panel:#1F2848; --line:#334070; --foam:#FFF6E0; --muted:#9AA3C7;
+  --beer:#FFB627; --beer-d:#C98500; --red:#FF4D5E; --green:#22D37A; --blue:#3B82F6;
+  --display: Bungee, Impact, "Arial Black", sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--foam);
+  font-family:Rubik, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-tap-highlight-color:transparent; touch-action:manipulation;
+  padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0);
+}
+.screen{display:none; min-height:100%; flex-direction:column; padding:20px; max-width:520px; margin:0 auto}
+.screen.on{display:flex}
+button{font-family:inherit; cursor:pointer; color:inherit}
+button:focus-visible,input:focus-visible{outline:3px solid var(--beer); outline-offset:3px}
+
+.logo{font-family:var(--display); line-height:.9; margin:8vh 0 6px; font-size:clamp(3rem,16vw,5rem); color:var(--beer); text-shadow:5px 5px 0 var(--red)}
+.logo span{display:block}
+.tag{color:var(--muted); margin:0 0 36px; font-size:1.05rem}
+
+label{display:block; font-weight:600; margin:0 0 8px}
+input{width:100%; font:600 1.2rem Rubik, sans-serif; color:var(--foam); background:var(--panel); border:2px solid var(--line); border-radius:14px; padding:14px 16px}
+input::placeholder{color:#6B759D}
+.code-in{text-transform:uppercase; letter-spacing:.3em; text-align:center; font-family:var(--display); font-size:1.5rem}
+.btn{display:block; width:100%; font-weight:800; font-size:1.15rem; border:0; border-radius:14px; padding:16px; background:var(--beer); color:var(--bg); box-shadow:0 5px 0 var(--beer-d); margin:14px 0 0; text-decoration:none; text-align:center}
+.btn:active{transform:translateY(4px); box-shadow:0 1px 0 var(--beer-d)}
+.btn.ghost{background:transparent; color:var(--foam); box-shadow:inset 0 0 0 2px var(--line)}
+.btn.ghost:active{transform:translateY(2px)}
+.btn.wa{background:var(--green); box-shadow:0 5px 0 #149356}
+.or{display:flex; align-items:center; gap:12px; color:var(--muted); margin:28px 0 20px}
+.or::before,.or::after{content:""; flex:1; height:2px; background:var(--line)}
+.notice{background:#3A1F2E; border:2px solid var(--red); border-radius:14px; padding:14px; margin:0 0 20px; line-height:1.4}
+.err{color:var(--red); min-height:1.4em; margin:10px 0 0; font-weight:600}
+
+.lobby-code{font-family:var(--display); font-size:clamp(3.2rem,18vw,5rem); color:var(--beer); text-align:center; letter-spacing:.08em; margin:4vh 0 0}
+.lobby-hint{text-align:center; color:var(--muted); margin:4px 0 24px}
+.players{list-style:none; padding:0; margin:18px 0; display:flex; flex-wrap:wrap; gap:8px}
+.players li{background:var(--panel); border-radius:999px; padding:9px 16px; font-weight:600}
+.players li.off{opacity:.4}
+.players li.host::after{content:" 👑"}
+.muted{color:var(--muted)}
+.spacer{flex:1}
+
+#game{padding:12px 12px 16px}
+.topbar{display:flex; align-items:center; gap:8px; margin-bottom:10px}
+.topbar .rnd{font-family:var(--display); color:var(--beer); font-size:1.1rem; flex:1}
+.icon{background:var(--panel); color:var(--foam); border:0; border-radius:12px; min-width:46px; height:46px; font-size:1.25rem; font-weight:800; padding:0 12px}
+#stage{position:relative; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; min-height:62vh; user-select:none; -webkit-user-select:none}
+
+.intro .gname{font-family:var(--display); font-size:clamp(2rem,10vw,3rem); color:var(--beer); line-height:1}
+.intro .rule{font-size:1.25rem; max-width:20em; margin:16px auto 26px; line-height:1.45}
+.intro .count{font-family:var(--display); font-size:6rem; color:var(--foam); animation:beat 1s infinite}
+
+/* Warte auf Grün */
+.pad{position:absolute; inset:0; border-radius:24px; display:flex; align-items:center; justify-content:center; touch-action:none}
+.pad.red{background:var(--red)} .pad.green{background:var(--green)} .pad.dark{background:#2A3152}
+.padtxt{font-family:var(--display); font-size:clamp(2.6rem,13vw,4.6rem); color:var(--bg); pointer-events:none}
+
+/* Tipp die 7 */
+.grid{display:grid; grid-template-columns:repeat(5,1fr); gap:6px; width:min(94vw,440px)}
+.cell{aspect-ratio:1; border:0; border-radius:12px; background:var(--panel); color:var(--foam); font-family:var(--display); font-size:clamp(1.3rem,7vw,1.9rem); touch-action:none; padding:0}
+.cell.hit{background:var(--green); color:var(--bg)} .cell.miss{background:var(--red)}
+
+/* Großer Knopf */
+.tapbig{width:min(68vw,280px); aspect-ratio:1; border-radius:50%; border:0; background:var(--beer); color:var(--bg); box-shadow:0 10px 0 var(--beer-d); display:flex; flex-direction:column; align-items:center; justify-content:center; touch-action:none}
+.tapbig b{font-family:var(--display); font-size:clamp(2.4rem,14vw,4.6rem); line-height:1}
+.tapbig small{font-weight:800; font-size:1.1rem}
+.tapbig:active{transform:translateY(6px); box-shadow:0 4px 0 var(--beer-d)}
+
+/* Maulwurf */
+.holes{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; width:min(88vw,380px)}
+.hole{aspect-ratio:1; border-radius:50%; border:0; background:#0C1124; box-shadow:inset 0 10px 0 #060914; position:relative; overflow:hidden; touch-action:none; padding:0}
+.hole span{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:clamp(2.2rem,12vw,3.2rem); transform:translateY(105%); transition:transform .07s; pointer-events:none}
+.hole.up span{transform:none}
+.hole.bonk{background:#1E6B47} .hole.miss{background:#5A2030}
+.score-line{font-family:var(--display); color:var(--beer); font-size:1.6rem; margin-bottom:16px}
+
+/* Bombe */
+.task{font-size:1.35rem; font-weight:800; margin-bottom:24px}
+.task b{font-family:var(--display); font-weight:400; font-size:1.6rem; display:block; margin-top:6px}
+.wires{display:flex; flex-direction:column; gap:16px; width:min(88vw,400px)}
+.wire{height:48px; border:0; border-radius:24px; touch-action:none; box-shadow:inset 0 -6px 0 rgba(0,0,0,.25)}
+.wire.cut{opacity:.25}
+.wire.boom{animation:shake .35s}
+
+/* Bier zapfen */
+.glass{position:relative; width:min(46vw,180px); height:min(48vh,320px); border:5px solid #E9EEF9; border-top:0; border-radius:0 0 28px 28px; overflow:hidden; background:rgba(255,255,255,.05); touch-action:none}
+.fill{position:absolute; left:0; right:0; bottom:0; height:0; background:linear-gradient(#FFC94A,#E38E00)}
+.fill::before{content:""; position:absolute; left:0; right:0; top:-12px; height:14px; background:var(--foam); border-radius:7px}
+.fill.empty::before{display:none}
+.mark{position:absolute; left:0; right:0; height:4px; margin-bottom:-2px; background:var(--red); z-index:2}
+.hint{color:var(--muted); font-weight:600; margin-top:18px}
+
+/* 10-Sekunden-Stopp */
+.clock{font-family:var(--display); font-size:clamp(4rem,22vw,7rem); margin-bottom:28px; font-variant-numeric:tabular-nums}
+
+/* Treffer-Zone */
+.track{position:relative; width:min(90vw,420px); height:76px; background:var(--panel); border-radius:16px; margin-bottom:32px; overflow:hidden}
+.zone{position:absolute; left:42%; width:16%; top:0; bottom:0; background:rgba(34,211,122,.28)}
+.zone::after{content:""; position:absolute; left:50%; top:0; bottom:0; width:2px; margin-left:-1px; background:var(--green)}
+.needle{position:absolute; top:8px; bottom:8px; width:8px; margin-left:-4px; background:var(--beer); border-radius:4px}
+
+/* Bierdeckel-Turm */
+.tower{position:relative; width:260px; height:min(52vh,360px); overflow:hidden; border-bottom:4px solid var(--line); touch-action:none}
+.tin{position:absolute; left:0; right:0; bottom:0; top:0; transition:transform .2s}
+.coaster{position:absolute; height:20px; border-radius:6px; background:#E9D3A3; box-shadow:inset 0 -4px 0 #B88A45}
+.coaster.mov{background:var(--beer); box-shadow:inset 0 -4px 0 var(--beer-d)}
+.coaster.drop{background:#7A3040; opacity:.6; transition:transform .5s, opacity .5s}
+.tstat{display:flex; gap:24px; font-family:var(--display); color:var(--beer); font-size:1.3rem; margin-bottom:10px}
+
+/* Perfekter Kreis */
+.cv{position:absolute; inset:0; width:100%; height:100%; touch-action:none; border-radius:24px; background:var(--panel)}
+.cvhint{position:absolute; top:16px; left:0; right:0; color:var(--muted); font-weight:600; pointer-events:none}
+
+/* Roter Knopf */
+.btns4{display:grid; grid-template-columns:1fr 1fr; gap:16px; width:min(84vw,340px)}
+.bigbtn{aspect-ratio:1; border:0; border-radius:26px; box-shadow:inset 0 -10px 0 rgba(0,0,0,.28); touch-action:none}
+.bigbtn.picked{outline:6px solid var(--foam); outline-offset:3px}
+.bigbtn.dim{opacity:.3}
+
+/* Tauziehen */
+.team-lbl{font-family:var(--display); font-size:1.5rem; margin-bottom:4px}
+.team-mates{color:var(--muted); font-weight:600; margin-bottom:6px; max-width:22em}
+.ropebar{position:relative; width:min(90vw,420px); height:14px; border-radius:7px; margin:22px 0 34px; background:linear-gradient(90deg,var(--red) 0 50%,var(--blue) 50% 100%)}
+.knot{position:absolute; top:50%; left:50%; width:36px; height:36px; margin:-18px 0 0 -18px; border-radius:50%; background:var(--foam); border:6px solid var(--bg); transition:left .3s}
+
+/* Feedback & Ergebnis */
+.fb{font-family:var(--display); font-size:clamp(2rem,10vw,3.4rem); margin-bottom:12px}
+.fb.good{color:var(--green)} .fb.bad{color:var(--red); font-size:clamp(1.6rem,8vw,2.4rem)} .fb.meh{color:var(--beer); font-size:clamp(1.6rem,8vw,2.4rem)}
+.wait p{margin:6px 0; font-size:1.1rem}
+.wc{color:var(--muted)}
+.result{width:100%}
+.gsmall{color:var(--muted); font-weight:600; margin-bottom:8px}
+.boom{font-family:var(--display); font-size:clamp(1.9rem,9vw,2.9rem); color:var(--beer); line-height:1.1; animation:pop .45s ease-out}
+.sub{font-size:1.2rem; font-weight:600; margin-top:12px}
+.note{color:var(--muted); font-weight:600; margin-top:8px}
+.rows{list-style:none; padding:0; margin:22px 0 0; text-align:left}
+.rows li{display:flex; justify-content:space-between; gap:12px; padding:10px 14px; border-radius:12px; background:var(--panel); margin-bottom:6px; font-weight:600}
+.rows li.l{background:#4A2133}
+.rows li.f span:last-child{color:var(--red)}
+.next{margin-top:18px; color:var(--muted)}
+
+.board{display:none; position:fixed; inset:0; background:rgba(10,14,30,.92); z-index:5; padding:calc(20px + env(safe-area-inset-top,0)) 20px 20px}
+.board.open{display:block}
+.board-in{max-width:480px; margin:0 auto}
+.board h2,.end h2{font-family:var(--display); color:var(--beer); font-weight:400; margin:0 0 16px}
+.rank{list-style:none; padding:0; margin:0}
+.rank li{display:flex; align-items:center; gap:12px; background:var(--panel); border-radius:12px; padding:12px 14px; margin-bottom:6px; font-weight:600}
+.rank .pos{font-family:var(--display); color:var(--muted); width:1.6em}
+.rank .nm{flex:1}
+
+.titles{display:grid; gap:10px; margin:0 0 24px}
+.title-card{background:var(--panel); border-radius:16px; padding:14px 16px; border-left:6px solid var(--beer)}
+.title-card .t{color:var(--muted); font-weight:600}
+.title-card .w{font-family:var(--display); font-size:1.5rem; margin-top:2px}
+
+@keyframes pop{0%{transform:scale(.6); opacity:0} 70%{transform:scale(1.08)} 100%{transform:scale(1); opacity:1}}
+@keyframes beat{0%,100%{transform:scale(1)} 50%{transform:scale(1.12)}}
+@keyframes shake{0%,100%{transform:translateX(0)} 25%{transform:translateX(-10px)} 75%{transform:translateX(10px)}}
+@media (prefers-reduced-motion: reduce){ *{animation:none!important; transition:none!important} }
+
+
+/* Etappe 3 */
+.holes{grid-template-columns:repeat(5,1fr); gap:8px; width:min(92vw,400px)}
+.hole span{font-size:clamp(1.4rem,8vw,2rem)}
+.full{position:absolute; inset:0; touch-action:none}
+.dbl{display:inline-block; font-family:var(--display); color:var(--bg); background:var(--beer); padding:6px 14px; border-radius:10px; margin-bottom:14px; animation:beat 1s infinite}
+.status{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px}
+.status span{background:var(--panel); border-radius:999px; padding:6px 12px; font-weight:600; font-size:.95rem}
+.status .rule{background:#3B2A10; color:var(--beer)}
+.icon.on{background:var(--beer); color:var(--bg)}
+.icon.dim{opacity:.45}
+.sp{width:100%; max-width:440px}
+.sp .gname{font-family:var(--display); color:var(--beer); font-size:clamp(1.6rem,8vw,2.4rem); line-height:1.05}
+.sp .rule{font-size:1.15rem; margin:12px 0 18px; line-height:1.45}
+.sp input{text-align:center}
+.qbox{background:var(--panel); border-radius:16px; padding:16px; font-size:1.25rem; font-weight:600; line-height:1.4; margin:10px 0 16px}
+.missing{color:var(--muted); font-size:.95rem; margin-top:4px}
+.groups{list-style:none; padding:0; margin:18px 0 0; text-align:left}
+.groups li{background:var(--panel); border-radius:12px; padding:10px 14px; margin-bottom:6px}
+.groups li.pair{border-left:6px solid var(--green)}
+.groups li.sel{outline:3px solid var(--beer)}
+.groups li b{display:block; font-size:1.05rem}
+.groups li small{color:var(--muted); font-weight:600}
+.btn.small{padding:12px; font-size:1rem}
+.wheelwrap{position:relative; width:min(84vw,330px); aspect-ratio:1; margin:6px auto 16px}
+.wheelwrap svg{width:100%; height:100%; display:block}
+.pointer{position:absolute; left:50%; top:-6px; margin-left:-14px; width:0; height:0; border-left:14px solid transparent; border-right:14px solid transparent; border-top:26px solid var(--foam); z-index:2}
+.roul{font-family:var(--display); font-size:clamp(2rem,10vw,3rem); color:var(--foam); min-height:1.3em}
+.lines div{font-weight:600; font-size:1.1rem; margin-top:8px}
+.flyscore{position:absolute; top:12px; left:0; right:0; font-family:var(--display); color:var(--beer); font-size:1.6rem; pointer-events:none; z-index:2}
+
+.race{display:flex; flex-direction:column; gap:8px; margin:16px 0; width:100%}
+.lane{position:relative; height:46px; border-radius:10px; background:var(--panel); border-left:8px solid; overflow:hidden}
+.lane::after{content:""; position:absolute; right:0; top:0; bottom:0; width:8px; background:repeating-linear-gradient(0deg,#FFF6E0 0 6px,#141B33 6px 12px)}
+.horse{position:absolute; left:2px; top:3px; font-size:2rem; display:inline-block}
+.cell[disabled]{opacity:.85}
+</style>
+</head>
+<body>
+
+<section class="screen on" id="start">
+  <h1 class="logo"><span>Schnell</span><span>schuss</span></h1>
+  <p class="tag">Blitzschnelle Minispiele. Der Langsamste trinkt.</p>
+  <div id="fbNotice"></div>
+  <label for="nameIn">Dein Name</label>
+  <input id="nameIn" maxlength="14" placeholder="z. B. Gerrit" autocomplete="off">
+  <button class="btn" onclick="createRoom()">Raum erstellen</button>
+  <div class="or">oder beitreten</div>
+  <input id="codeIn" class="code-in" maxlength="4" placeholder="CODE" autocomplete="off">
+  <button class="btn ghost" onclick="joinRoom()">Beitreten</button>
+  <p class="err" id="startErr"></p>
+</section>
+
+<section class="screen" id="lobby">
+  <div class="lobby-code" id="lobbyCode"></div>
+  <p class="lobby-hint">Raumcode</p>
+  <a class="btn wa" id="waBtn" target="_blank" rel="noopener">Per WhatsApp einladen</a>
+  <button class="btn ghost" onclick="copyLink()" id="copyBtn">Link kopieren</button>
+  <ul class="players" id="lobbyPlayers"></ul>
+  <div class="spacer"></div>
+  <div id="lobbyAction"></div>
+  <button class="btn ghost" onclick="leaveRoom()">Raum verlassen</button>
+</section>
+
+<section class="screen" id="game">
+  <div class="topbar" id="topbar"></div>
+  <div class="status" id="status" style="display:none"></div>
+  <div id="stage"></div>
+</section>
+
+<section class="screen end" id="end"></section>
+
+<div class="board" id="board" onclick="if(event.target===this)toggleBoard(false)">
+  <div class="board-in">
+    <h2>Rangliste</h2>
+    <ol class="rank" id="boardList"></ol>
+    <button class="btn ghost" onclick="toggleBoard(false)">Schließen</button>
+  </div>
+</div>
+
+<script>
+const QS = `In welchem Jahr fiel die Berliner Mauer?|1989|
+In welchem Jahr landeten die ersten Menschen auf dem Mond?|1969|
+In welchem Jahr sank die Titanic?|1912|
+In welchem Jahr wurde die Bundesrepublik Deutschland gegründet?|1949|
+In welchem Jahr war die Deutsche Wiedervereinigung?|1990|
+In welchem Jahr erreichte Kolumbus Amerika?|1492|
+In welchem Jahr wurde das erste iPhone vorgestellt?|2007|
+In welchem Jahr wurde der Euro als Bargeld eingeführt?|2002|
+In welchem Jahr fand die erste Fußball-WM statt?|1930|
+In welchem Jahr wurde Deutschland zum ersten Mal Fußball-Weltmeister?|1954|
+Wie viele Spieler stehen bei einer Fußballmannschaft auf dem Feld?|11|
+In welchem Jahr fand die erste Bundestagswahl statt?|1949|
+Wie viele Tore fielen im WM-Halbfinale 2014 zwischen Brasilien und Deutschland insgesamt?|8|
+Wie lang ist ein DIN-A4-Blatt?|29.7|cm
+Wie viel wiegt ein normales DIN-A4-Druckerblatt (80 g/m²)?|5|g
+In welchem Jahr wurde die Berliner Mauer gebaut?|1961|
+In welchem Jahr veröffentlichte Martin Luther seine 95 Thesen?|1517|
+In welchem Jahr wurde Google gegründet?|1998|
+In welchem Jahr wurde Facebook gegründet?|2004|
+In welchem Jahr begann der Erste Weltkrieg?|1914|
+In welchem Jahr endete der Zweite Weltkrieg in Europa?|1945|
+In welchem Jahr begann die Französische Revolution?|1789|
+In welchem Jahr wurde die Unabhängigkeitserklärung der USA unterzeichnet?|1776|
+In welchem Jahr fand das erste Oktoberfest statt?|1810|
+In welchem Jahr wurde der Eiffelturm eröffnet?|1889|
+In welchem Jahr fanden die ersten Olympischen Spiele der Neuzeit statt?|1896|
+In welchem Jahr war die Reaktorkatastrophe von Tschernobyl?|1986|
+In welchem Jahr erschien der erste Harry-Potter-Band auf Englisch?|1997|
+In welchem Jahr kam der erste Star-Wars-Film ins Kino?|1977|
+In welchem Jahr wurde die D-Mark eingeführt?|1948|
+In welchem Jahr starb Elvis Presley?|1977|
+In welchem Jahr startete der erste Satellit Sputnik?|1957|
+In welchem Jahr meldete Carl Benz sein Automobil zum Patent an?|1886|
+In welchem Jahr zerstörte der Vesuv die Stadt Pompeji (n. Chr.)?|79|
+In welchem Jahr wurde WhatsApp gegründet?|2009|
+In welchem Jahr wurde YouTube gegründet?|2005|
+In welchem Jahr wurde die erste SMS verschickt?|1992|
+In welchem Jahr wurde der FC Bayern München gegründet?|1900|
+In welchem Jahr wurde Coca-Cola zum ersten Mal verkauft?|1886|
+In welchem Jahr startete die erste Bundesliga-Saison?|1963|
+In welchem Jahr wurde John F. Kennedy ermordet?|1963|
+In welchem Jahr wurde das bayerische Reinheitsgebot erlassen?|1516|
+In welchem Jahr wurde die Pizza Margherita der Legende nach erfunden?|1889|
+In welchem Jahr kam Nutella auf den Markt?|1964|
+In welchem Jahr wurde Haribo gegründet?|1920|
+In welchem Jahr wurde Deutschland zum vierten Mal Fußball-Weltmeister?|2014|
+In welchem Jahr fand die Fußball-WM in Deutschland statt (Sommermärchen)?|2006|
+In welchem Jahr wurde Angela Merkel erstmals Bundeskanzlerin?|2005|
+In welchem Jahr wurde Barack Obama erstmals zum US-Präsidenten gewählt?|2008|
+In welchem Jahr wurde die Europäische Union durch den Vertrag von Maastricht beschlossen (Unterzeichnung)?|1992|
+In welchem Jahr kam die erste Playstation in Japan auf den Markt?|1994|
+In welchem Jahr erschien der Game Boy?|1989|
+In welchem Jahr wurde das World Wide Web öffentlich freigegeben?|1993|
+In welchem Jahr wurde Amazon gegründet?|1994|
+In welchem Jahr wurde Apple gegründet?|1976|
+In welchem Jahr wurde Microsoft gegründet?|1975|
+In welchem Jahr wurde Instagram veröffentlicht?|2010|
+In welchem Jahr ging Netflix in Deutschland an den Start?|2014|
+In welchem Jahr wurde der erste Golf (VW) gebaut?|1974|
+In welchem Jahr wurde Mozart geboren?|1756|
+In welchem Jahr wurde Beethoven geboren?|1770|
+In welchem Jahr wurde Albert Einstein geboren?|1879|
+In welchem Jahr starb Michael Jackson?|2009|
+In welchem Jahr gewann Deutschland den Eurovision Song Contest mit Lena?|2010|
+Wie hoch ist der Mount Everest?|8849|m
+Wie hoch ist die Zugspitze?|2962|m
+Wie lang ist der Rhein?|1233|km
+Wie lang ist der Nil ungefähr?|6650|km
+Wie viele Einwohner hat Deutschland ungefähr?|84|Mio.
+Wie groß ist die Fläche Deutschlands ungefähr?|357600|km²
+Wie hoch ist der Eiffelturm (mit Antenne)?|330|m
+Wie hoch ist der Kölner Dom?|157|m
+Wie hoch ist der Berliner Fernsehturm?|368|m
+Wie hoch ist der Burj Khalifa in Dubai?|828|m
+Wie viele Einwohner hat Berlin ungefähr?|3.8|Mio.
+Wie viele Einwohner hat Hamburg ungefähr?|1.9|Mio.
+Wie viele Einwohner hat München ungefähr?|1.5|Mio.
+Wie lang ist das deutsche Autobahnnetz ungefähr?|13200|km
+Wie viele Mitgliedsstaaten haben die Vereinten Nationen?|193|
+Wie tief ist der Marianengraben an der tiefsten Stelle ungefähr?|10994|m
+Wie groß ist der Bodensee?|536|km²
+Wie lang ist die Elbe?|1094|km
+Wie hoch ist der Brocken im Harz?|1141|m
+Wie hoch ist der Großglockner?|3798|m
+Wie hoch ist der Mont Blanc ungefähr?|4806|m
+Wie viele Einwohner hat China ungefähr?|1400|Mio.
+Wie viele Menschen leben ungefähr auf der Erde?|8.1|Mrd.
+Wie lang ist die Chinesische Mauer mit allen Abschnitten?|21196|km
+Wie lang ist der Erdumfang am Äquator?|40075|km
+Wie weit ist der Mond im Schnitt von der Erde entfernt?|384400|km
+Wie groß ist der Durchmesser der Erde?|12742|km
+Wie viele Einwohner hat Niedersachsen ungefähr?|8|Mio.
+Wie viele Länder gibt es in Afrika?|54|
+Wie viele Mitgliedsstaaten hat die EU?|27|
+Wie viele Zeitzonen hat Russland?|11|
+Wie hoch ist der Kilimandscharo?|5895|m
+Wie groß ist die Vatikanstadt?|0.44|km²
+Wie groß ist die Sahara ungefähr?|9|Mio. km²
+Wie viele Einwohner hat New York City ungefähr?|8.3|Mio.
+Wie viele Einwohner hat Island ungefähr?|390000|
+Wie viele Einwohner hat Norwegen ungefähr?|5.5|Mio.
+Wie viele Einwohner hat Österreich ungefähr?|9.1|Mio.
+Wie viele Einwohner hat die Schweiz ungefähr?|8.9|Mio.
+Wie viele Einwohner hat Luxemburg ungefähr?|660000|
+Wie weit ist Berlin von Paris entfernt (Luftlinie)?|878|km
+Wie weit ist Berlin von New York entfernt (Luftlinie)?|6385|km
+Wie viele bewohnte Ostfriesische Inseln gibt es?|7|
+Wie viele Seen gibt es in Finnland ungefähr?|188000|
+Wie viel Prozent der Fläche Deutschlands ist Wald?|32|%
+Wie viele Bäume gibt es in Deutschland ungefähr?|90|Mrd.
+Wie viele Städte in Deutschland haben über eine Million Einwohner?|4|
+Wie viele Gemeinden gibt es in Deutschland ungefähr?|10800|
+Wie lang ist die A7, die längste deutsche Autobahn?|963|km
+Wie lang ist der Eurotunnel unter dem Ärmelkanal?|50|km
+Wie lang ist der Gotthard-Basistunnel?|57|km
+Wie viele Stufen führen im Kölner Dom auf die Aussichtsplattform?|533|
+Wie viele Stufen hat der Eiffelturm bis ganz nach oben?|1665|
+Wie viele Stockwerke hat der Burj Khalifa?|163|
+Wie viele Brücken hat Hamburg ungefähr?|2500|
+Wie viel wiegt der Eiffelturm ungefähr?|10100|Tonnen
+Wie viele Nieten hat der Eiffelturm ungefähr?|2500000|
+Wie lang ist die Nordschleife des Nürburgrings?|20.8|km
+Wie lang ist ein Marathon?|42195|m
+Wie schnell lief Usain Bolt seinen 100-m-Weltrekord?|9.58|Sekunden
+Wie hoch hängt ein Basketballkorb?|305|cm
+Wie breit ist ein Fußballtor?|732|cm
+Wie hoch ist ein Fußballtor?|244|cm
+Wie viele Spieler hat eine Rugby-Union-Mannschaft auf dem Feld?|15|
+Wie viele Felder hat ein Schachbrett?|64|
+Was ist die höchste Punktzahl mit drei Darts?|180|
+Wie hoch ist ein Tennisnetz in der Mitte?|91.4|cm
+Wie groß ist der Durchmesser einer Dartscheibe?|451|mm
+Wie weit ist die Abwurflinie beim Steeldart von der Scheibe entfernt (waagerecht)?|237|cm
+Wie hoch hängt das Bull einer Dartscheibe?|173|cm
+Wie lang ist eine Bowlingbahn bis zum ersten Pin ungefähr?|18.3|m
+Wie viele Spieler pro Team stehen beim Eishockey auf dem Eis (mit Torwart)?|6|
+Wie viel wiegt ein Tischtennisball?|2.7|g
+Wie hoch ist ein Tischtennisnetz?|15.25|cm
+Wie lang ist ein olympisches Schwimmbecken?|50|m
+Wie hoch ist der Weltrekord im Hochsprung der Männer?|2.45|m
+Wie weit ist der Weltrekord im Weitsprung der Männer?|8.95|m
+Wie viele Mannschaften spielen in der 1. Bundesliga?|18|
+Wie viel wiegt die Kugel beim Kugelstoßen der Männer?|7.26|kg
+Wie viele Punkte hat ein perfektes Bowling-Spiel?|300|
+Wie viele WM-Titel hat Brasilien im Männerfußball?|5|
+Wie viele Formel-1-WM-Titel hat Michael Schumacher gewonnen?|7|
+Wie viele Grand-Slam-Titel im Einzel hat Steffi Graf gewonnen?|22|
+Wie viele Tore schoss Miroslav Klose für die Nationalmannschaft?|71|
+Wie viele WM-Tore hat Miroslav Klose geschossen?|16|
+Wie viele Länderspiele bestritt Lothar Matthäus?|150|
+Wie viele Bundesligatore schoss Gerd Müller?|365|
+Wie viele Bundesligatore schoss Robert Lewandowski?|312|
+Wie viele Zuschauer passen ungefähr in den Signal Iduna Park in Dortmund?|81000|
+Wie viele Zuschauer passen ungefähr in die Allianz Arena?|75000|
+Wie viele Zuschauer passen ungefähr ins Wembley-Stadion?|90000|
+Wie viele Kilometer läuft ein Fußballprofi im Schnitt pro Spiel?|11|km
+Wie viel wiegt ein Formel-1-Auto mindestens (2024, mit Fahrer)?|798|kg
+Wie viele Runden hat der Große Preis von Monaco?|78|
+Wie schnell fuhr der Bugatti Chiron bei seiner Rekordfahrt?|490|km/h
+Wie viele Knochen hat ein erwachsener Mensch?|206|
+Wie viele Zähne hat ein Erwachsener mit Weisheitszähnen?|32|
+Wie viele Liter Blut hat ein Erwachsener ungefähr?|5|Liter
+Wie viele Muskeln hat der Mensch ungefähr?|650|
+Wie viele Haare hat ein Mensch ungefähr auf dem Kopf?|100000|
+Wie viel Prozent des menschlichen Körpers bestehen aus Wasser?|60|%
+Wie viel wiegt ein menschliches Gehirn ungefähr?|1350|g
+Wie viele Chromosomen hat ein Mensch?|46|
+Wie viele Atemzüge macht ein Erwachsener in Ruhe pro Minute ungefähr?|14|
+Wie viele Jahre seines Lebens verschläft ein Mensch ungefähr?|25|Jahre
+Wie alt wurde der älteste Mensch aller Zeiten (Jeanne Calment)?|122|Jahre
+Wie viele Wochen dauert eine Schwangerschaft im Schnitt?|40|Wochen
+Wie viel wiegt ein neugeborenes Baby in Deutschland im Schnitt?|3400|g
+Wie groß sind Männer in Deutschland im Schnitt?|179|cm
+Wie groß sind Frauen in Deutschland im Schnitt?|166|cm
+Wie hoch ist die Lebenserwartung von Männern in Deutschland ungefähr?|78|Jahre
+Wie hoch ist die Lebenserwartung von Frauen in Deutschland ungefähr?|83|Jahre
+Wie schnell ist das Licht?|299792|km/s
+Wie schnell ist der Schall in der Luft ungefähr?|343|m/s
+Wie viele Elemente hat das Periodensystem?|118|
+Wie weit ist die Sonne von der Erde entfernt?|150|Mio. km
+Wie heiß ist die Oberfläche der Sonne ungefähr?|5500|°C
+Wie viele Erdtage dauert ein Jahr auf dem Mars?|687|Tage
+Wie viele Monde hat der Mars?|2|
+Wie viele Stunden hat eine Woche?|168|Stunden
+Wie viele Sekunden hat ein Tag?|86400|Sekunden
+Wie viele Minuten hat eine Woche?|10080|Minuten
+Wie viele Tasten hat ein Klavier?|88|
+Bei wie viel Grad Fahrenheit gefriert Wasser?|32|°F
+Wie viele Kilokalorien hat ein Gramm Fett?|9|kcal
+Wie viele Kilokalorien hat ein Gramm Alkohol?|7|kcal
+Wie viele Zentimeter hat ein Zoll?|2.54|cm
+Wie viele Meter hat eine Meile?|1609|m
+Wie viele Gramm hat ein amerikanisches Pfund?|454|g
+Wie viele Liter hat eine US-Gallone?|3.79|Liter
+Wie viel wiegt eine 1-Euro-Münze?|7.5|g
+Wie viel wiegt eine 2-Euro-Münze?|8.5|g
+Wie schnell kann ein Gepard laufen?|100|km/h
+Wie viele Monate ist ein Elefant trächtig?|22|Monate
+Wie viele Herzen hat ein Oktopus?|3|
+Wie schnell kann ein Strauß laufen?|70|km/h
+Wie groß wird eine Giraffe ungefähr?|5.5|m
+Wie viele Stunden schläft ein Koala pro Tag ungefähr?|20|Stunden
+Wie viel wiegt ein ausgewachsener afrikanischer Elefantenbulle ungefähr?|6|Tonnen
+Wie viele Augen hat eine Honigbiene?|5|
+Wie schnell ist ein Wanderfalke im Sturzflug ungefähr?|320|km/h
+Wie viele Eier legt ein Legehuhn pro Jahr ungefähr?|300|
+Wie viele Rinder gibt es in Deutschland ungefähr?|11|Mio.
+Wie viele Schweine gibt es in Deutschland ungefähr?|21|Mio.
+Wie viele Katzen leben in deutschen Haushalten ungefähr?|15|Mio.
+Wie viele Hunde leben in deutschen Haushalten ungefähr?|10|Mio.
+Wie viele Liter Milch gibt eine Kuh in Deutschland pro Tag im Schnitt ungefähr?|28|Liter
+Wie viel Alkohol hat ein normales Pils ungefähr?|4.8|Vol.-%
+Wie viele Brauereien gibt es in Deutschland ungefähr?|1500|
+Wie viele Liter Bier wurden auf dem Oktoberfest 2023 ausgeschenkt?|6.5|Mio. Liter
+Wie viele Besucher hatte das Oktoberfest 2023?|7.2|Mio.
+Wie viele Kilokalorien hat ein halber Liter Pils ungefähr?|210|kcal
+Wie viele Brotsorten gibt es in Deutschland ungefähr?|3200|
+Wie viel Zucker steckt in einer 0,33-Liter-Dose Coca-Cola?|35|g
+Wie viele Kilokalorien hat ein Big Mac ungefähr?|500|kcal
+Wie viel Alkohol hat Jägermeister?|35|Vol.-%
+Wie viel Alkohol muss Wodka in der EU mindestens haben?|37.5|Vol.-%
+Wie viele Liter fasst ein normales Gastro-Bierfass?|50|Liter
+Wie viele Milliliter passen in ein Standard-Schnapsglas (2 cl)?|20|ml
+Wie viele Kästen à 20 × 0,5 Liter ergeben einen Hektoliter Bier?|10|
+Wie viele Eier isst ein Deutscher im Jahr ungefähr?|230|
+Wie viel Kilo Schokolade isst ein Deutscher im Jahr ungefähr?|9|kg
+Wie viele Liter Kaffee trinkt ein Deutscher im Jahr ungefähr?|165|Liter
+Wie viele Liter Wein trinkt ein Deutscher im Jahr ungefähr?|20|Liter
+Wie viele Abgeordnete hat der Bundestag seit der Wahl 2025?|630|
+Wie viele Bundeskanzler hatte die Bundesrepublik bis einschließlich Friedrich Merz?|10|
+Wie viele Pkw sind in Deutschland ungefähr zugelassen?|49|Mio.
+Wie schnell fährt ein ICE im Betrieb maximal?|300|km/h
+Wie lang ist das Schienennetz der Deutschen Bahn ungefähr?|33000|km
+Wie viele Windräder stehen an Land in Deutschland ungefähr?|28500|
+Wie viele Studierende gibt es in Deutschland ungefähr?|2.9|Mio.
+Wie viele Kinder bekommt eine Frau in Deutschland im Schnitt (2023)?|1.35|
+Wie viele Babys wurden 2023 in Deutschland geboren?|693000|
+Wie viele Ehen wurden 2023 in Deutschland geschlossen?|361000|
+Wie alt ist die Bevölkerung in Deutschland im Durchschnitt ungefähr?|45|Jahre
+Welche Schuhgröße haben Männer in Deutschland im Schnitt ungefähr?|43|
+Wie viele Karten hat ein Skatblatt?|32|
+Wie viele Karten hat ein Pokerblatt ohne Joker?|52|
+Wie viele Augen hat ein normaler Würfel insgesamt?|21|
+Wie viele Felder hat ein Monopoly-Spielbrett?|40|
+Wie viele Felder hat ein Sudoku?|81|
+Wie viele Flächen hat ein Ikosaeder?|20|
+Wie viele Tasten hat eine normale deutsche PC-Tastatur?|105|
+Wie viele James-Bond-Filme gibt es von Eon bis „Keine Zeit zu sterben“?|25|
+Wie viele Folgen hat die Serie „Friends“?|236|
+Wie viele Staffeln hat „Game of Thrones“?|8|
+Wie lang ist der Film „Titanic“?|194|Minuten
+Wie viele Oscars gewann der Film „Titanic“?|11|
+Wie viele Streifen hat die US-Flagge?|13|
+Wie viele Sterne hat die Europaflagge?|12|
+Wie viele Tage hat ein Schaltjahr?|366|
+Wie hoch fliegt ein Passagierflugzeug auf Reisehöhe ungefähr?|10500|m
+Wie schnell fliegt ein Passagierjet auf Reisehöhe ungefähr?|900|km/h
+Wie viele Passagiere darf ein Airbus A380 maximal befördern?|853|
+Wie viele Standardcontainer (TEU) passen auf die größten Containerschiffe ungefähr?|24000|
+Wie lang ist die „Icon of the Seas“, eines der größten Kreuzfahrtschiffe?|365|m
+Wie viele Einwohner hat Mallorca ungefähr?|930000|
+Wie viele Einwohner hat Tokio (Stadtgebiet) ungefähr?|14|Mio.
+Wie viele Einwohner hat Köln ungefähr?|1.1|Mio.
+Wie viele Einwohner hat Bremen ungefähr?|570000|
+Wie viele Einwohner hat Paris (Stadt) ungefähr?|2.1|Mio.
+Wie viele Einwohner hat London ungefähr?|8.9|Mio.
+Wie viele Einwohner haben die USA ungefähr?|335|Mio.
+Wie viele Einwohner hat Indien ungefähr?|1430|Mio.
+Wie viele Bundesstaaten haben die USA?|50|
+Wie viele Kantone hat die Schweiz?|26|
+Wie viele Bundesländer hat Österreich?|9|
+Wie lang ist die Donau?|2857|km
+Wie hoch ist der Feldberg im Schwarzwald?|1493|m
+Wie groß ist der Durchmesser des Mondes?|3474|km
+Wie viele Tage braucht der Mond für eine Erdumrundung ungefähr?|27.3|Tage
+Wie lange braucht das Licht von der Sonne zur Erde?|8.3|Minuten
+Wie viele Planeten hat unser Sonnensystem?|8|
+Wie viele Kilometer misst der Erdumfang über die Pole ungefähr?|40008|km
+Wie hoch ist die Freiheitsstatue mit Sockel?|93|m
+Wie hoch ist der Big Ben (Elizabeth Tower)?|96|m
+Wie hoch ist der Schiefe Turm von Pisa ungefähr?|56|m
+Wie hoch ist die Cheops-Pyramide heute ungefähr?|139|m
+Wie lang ist die Golden Gate Bridge?|2737|m
+Wie viele Sitzplätze hat die Elbphilharmonie im Großen Saal ungefähr?|2100|
+Wie viele Bundesliga-Meisterschaften hat der FC Bayern bis 2025 gewonnen?|34|
+Wie viele Länder nahmen an der Fußball-WM 2022 teil?|32|
+Wie viele Länder nehmen an der Fußball-WM 2026 teil?|48|
+Wie viele Spieler stehen beim Handball pro Team auf dem Feld (mit Torwart)?|7|
+Wie viele Spieler stehen beim Volleyball pro Team auf dem Feld?|6|
+Wie lang dauert ein Handballspiel ohne Pausen?|60|Minuten
+Wie viele Pins stehen beim Bowling?|10|
+Wie viele Löcher hat ein normaler Golfplatz?|18|
+Wie lange dauert eine Eishockey-Partie ohne Unterbrechungen?|60|Minuten
+Wie viele Kilometer ist die Tour de France ungefähr lang?|3400|km
+Wie viele Etappen hat die Tour de France normalerweise?|21|
+Wie viele Kegel stehen beim Kegeln?|9|
+Wie viele Saiten hat eine normale Gitarre?|6|
+Wie viele Saiten hat eine Geige?|4|
+Wie viele Buchstaben hat das deutsche Alphabet ohne Umlaute und ß?|26|
+Wie viele Sprachen gibt es auf der Welt ungefähr?|7000|
+Wie viele Länder haben Deutsch als Amtssprache?|6|
+Wie viele Nachbarländer hat Deutschland?|9|
+Wie viele Millimeter Regen fallen in Deutschland im Jahr ungefähr?|790|mm
+Wie hoch ist der höchste Leuchtturm Deutschlands in Campen ungefähr?|65|m`.trim().split('\n').map(l => { const [q, a, u] = l.split('|'); return { q, a: parseFloat(a), u: u || '' }; });
+
+
+/* ===================== Firebase-Zugangsdaten ===================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyCK2kF3VewI_GvY82NtFh0yv4_erxzS6dg",
+  authDomain: "schocken-das-spiel.firebaseapp.com",
+  databaseURL: "https://schocken-das-spiel-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "schocken-das-spiel",
+  storageBucket: "schocken-das-spiel.firebasestorage.app",
+  messagingSenderId: "326846476225",
+  appId: "1:326846476225:web:79e79a27e33b5fe7bd0940"
+};
+/* ================================================================ */
+
+const INTRO_MS = 5000;     // Ansage vor jedem Minispiel
+const SPIN_MS = 4500;      // Dauer der Glücksrad-Drehung
+const MAX_SHIELDS = 2;
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function show(id){ document.querySelectorAll('.screen').forEach(e => e.classList.toggle('on', e.id === id)); }
+function rng(seed){ let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function shuffle(arr, r){ for(let i = arr.length - 1; i > 0; i--){ const j = Math.floor(r() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
+const store = { get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }, set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} } };
+const sec = ms => (ms / 1000).toFixed(2).replace('.', ',') + ' s';
+const clean = o => JSON.parse(JSON.stringify(o));
+const num = v => Number(v).toLocaleString('de-DE', { maximumFractionDigits: 2 });
+const rint = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+
+/* ---------- Firebase ---------- */
+let db = null, offset = 0;
+const cfg = window.__ssConfig || firebaseConfig;
+try{
+  if(cfg.apiKey && window.firebase){
+    firebase.initializeApp(cfg);
+    db = firebase.database();
+    db.ref('.info/serverTimeOffset').on('value', s => { offset = s.val() || 0; });
+  }
+}catch(e){ console.error(e); }
+if(!db) $('#fbNotice').innerHTML = '<div class="notice">Keine Verbindung zur Datenbank. Prüf deine Internetverbindung und lade die Seite neu.</div>';
+const now = () => Date.now() + offset;
+const TS = () => firebase.database.ServerValue.TIMESTAMP;
+
+/* ---------- Zustand ---------- */
+let pferdDone = -1;
+let pid = store.get('ss_pid');
+if(!pid){ pid = 'p' + Math.random().toString(36).slice(2, 10); store.set('ss_pid', pid); }
+let code = null, roomRef = null, room = null, isHost = false;
+let viewKey = '', hostBusy = false, timers = [], rafs = [], liveHook = null;
+function clearTimers(){ timers.forEach(id => { clearTimeout(id); clearInterval(id); }); timers = []; rafs.forEach(cancelAnimationFrame); rafs = []; liveHook = null; }
+const T = (fn, ms) => { const id = setTimeout(fn, ms); timers.push(id); return id; };
+function loop(fn){ let alive = true; const step = t => { if(!alive) return; if(fn(t) === false){ alive = false; return; } rafs.push(requestAnimationFrame(step)); }; rafs.push(requestAnimationFrame(step)); }
+function nameOf(id){ const p = room && room.players && room.players[id]; return p ? p.name : '?'; }
+const nm = id => esc(nameOf(id));
+const joinNames = ids => ids.map(nm).join(' & ');
+
+$('#nameIn').value = store.get('ss_name') || '';
+const urlCode = new URLSearchParams(location.search).get('raum');
+if(urlCode) $('#codeIn').value = urlCode.toUpperCase();
+
+function getName(){
+  const n = $('#nameIn').value.trim();
+  if(!n){ $('#startErr').textContent = 'Gib erst deinen Namen ein.'; $('#nameIn').focus(); return null; }
+  store.set('ss_name', n); return n;
+}
+function newCode(){ const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; let c = ''; for(let i = 0; i < 4; i++) c += a[Math.floor(Math.random() * a.length)]; return c; }
+const freshPlayer = name => ({ name, online: true, joined: TS(), drinks: 0, losses: 0, wins: 0, shields: 0, shieldOn: false, shieldsWon: 0 });
+
+/* ---------- Raum ---------- */
+async function createRoom(){
+  if(!db) return;
+  const name = getName(); if(!name) return;
+  let c, tries = 0;
+  do { c = newCode(); tries++; } while((await db.ref('schnellschuss/rooms/' + c).once('value')).exists() && tries < 10);
+  await db.ref('schnellschuss/rooms/' + c).set({ meta: { host: pid, status: 'lobby', created: TS() }, players: { [pid]: freshPlayer(name) } });
+  enterRoom(c);
+}
+async function joinRoom(){
+  if(!db) return;
+  const name = getName(); if(!name) return;
+  const c = $('#codeIn').value.trim().toUpperCase();
+  if(c.length !== 4){ $('#startErr').textContent = 'Der Raumcode hat 4 Buchstaben.'; return; }
+  const snap = await db.ref('schnellschuss/rooms/' + c).once('value');
+  if(!snap.exists()){ $('#startErr').textContent = 'Diesen Raum gibt es nicht. Prüf den Code.'; return; }
+  const r = snap.val();
+  const ref = db.ref('schnellschuss/rooms/' + c + '/players/' + pid);
+  if(r.players && r.players[pid]) await ref.update({ name, online: true });
+  else await ref.set(freshPlayer(name));
+  enterRoom(c);
+}
+function enterRoom(c){
+  code = c;
+  roomRef = db.ref('schnellschuss/rooms/' + c);
+  const me = roomRef.child('players/' + pid + '/online');
+  me.onDisconnect().set(false);
+  me.set(true);
+  history.replaceState(null, '', location.pathname + '?raum=' + c);
+  roomRef.on('value', s => { room = s.val(); onRoom(); });
+  setInterval(hostTick, 400);
+}
+function leaveRoom(){ if(roomRef) roomRef.child('players/' + pid + '/online').set(false); location.href = location.pathname; }
+function inviteLink(){ return location.origin + location.pathname + '?raum=' + code; }
+function copyLink(){
+  const t = inviteLink();
+  (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(
+    () => { $('#copyBtn').textContent = 'Kopiert ✓'; setTimeout(() => $('#copyBtn').textContent = 'Link kopieren', 1500); },
+    () => prompt('Link kopieren:', t)
+  );
+}
+
+function onRoom(){
+  if(!room || !room.meta){ alert('Der Raum wurde geschlossen.'); location.href = location.pathname; return; }
+  const P = room.players || {};
+  const h = P[room.meta.host];
+  if(!h || !h.online){
+    const next = Object.entries(P).filter(([, p]) => p.online).sort((a, b) => (a[1].joined || 0) - (b[1].joined || 0))[0];
+    if(next && next[0] === pid) roomRef.child('meta/host').set(pid);
+  }
+  isHost = room.meta.host === pid;
+  const st = room.meta.status;
+  if(st === 'lobby') renderLobby();
+  else if(st === 'playing') renderGame();
+  else if(st === 'ended') renderEnd();
+}
+
+function renderLobby(){
+  viewKey = ''; clearTimers(); show('lobby');
+  $('#lobbyCode').textContent = code;
+  $('#waBtn').href = 'https://wa.me/?text=' + encodeURIComponent('Komm in meine Schnellschuss-Runde 🍻 ' + inviteLink());
+  const P = room.players || {};
+  $('#lobbyPlayers').innerHTML = Object.entries(P).sort((a, b) => (a[1].joined || 0) - (b[1].joined || 0))
+    .map(([id, p]) => `<li class="${p.online ? '' : 'off'} ${id === room.meta.host ? 'host' : ''}">${esc(p.name)}</li>`).join('');
+  const n = Object.values(P).filter(p => p.online).length;
+  $('#lobbyAction').innerHTML = isHost
+    ? `<button class="btn" onclick="startGame()">Spiel starten (${n} Spieler)</button>`
+    : `<p class="muted" style="text-align:center">Warte, bis der Host startet …</p>`;
+}
+function startGame(){
+  const welle = rint(9, 14);
+  roomRef.child('meta').update({ status: 'playing', nextDouble: rint(4, 8), nextWelle: welle, nextJoker: welle + rint(8, 12) });
+}
+
+/* ===================== Minispiele ===================== */
+function teamsOf(r){
+  const ids = shuffle(Object.keys(r.parts || {}).sort(), rng(r.seed + 99));
+  return { A: ids.filter((_, i) => i % 2 === 0), B: ids.filter((_, i) => i % 2 === 1) };
+}
+function fitCanvas(cv, LW, LH){
+  const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const s = Math.min(w / LW, h / LH), ox = (w - LW * s) / 2, oy = (h - LH * s) / 2;
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * ox, dpr * oy);
+  return { ctx, s, ox, oy, w, h };
+}
+function box(el){ const d = document.createElement('div'); d.className = 'full'; el.appendChild(d); return d; }
+
+const RAD = [
+  { k: 'lokal', e: '🍻', t: 'Lokalrunde', d: 'Alle trinken, nur der Dreher nicht' },
+  { k: 'verteilen', e: '🎯', t: 'Verteilen', d: 'Der Dreher verteilt 3 Schlücke' },
+  { k: 'pech', e: '🍺', t: 'Pech', d: 'Der Dreher trinkt 2' },
+  { k: 'prost', e: '🥂', t: 'Prost!', d: 'Alle trinken einen' },
+  { k: 'opfer', e: '🎲', t: 'Zufallsopfer', d: 'Einer wird ausgelost und trinkt 2' },
+  { k: 'verkuppelt', e: '🔗', t: 'Verkuppelt', d: 'Der Dreher bekommt einen Partner für 3 Runden' },
+  { k: 'regel', e: '👑', t: 'Regelmacher', d: 'Der Dreher stellt eine Regel für 5 Runden auf' },
+  { k: 'jackpot', e: '🛡️', t: 'Jackpot', d: 'Der Dreher bekommt ein Schutzschild' },
+  { k: 'niete', e: '😅', t: 'Niete', d: 'Nichts passiert' }
+];
+
+const GAMES = {
+  gruen: {
+    title: 'Warte auf Grün', rule: 'Tipp erst, wenn es grün wird. Zu früh heißt trinken!', max: 9000,
+    run(el, r, done){
+      const delay = 1500 + r() * 4000;
+      el.innerHTML = '<div class="pad red" id="pad"><div class="padtxt">Warten …</div></div>';
+      const pad = el.querySelector('#pad'); let green = false, t0 = 0;
+      pad.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        if(!green){ pad.className = 'pad dark'; done({ fail: true, why: 'zu früh' }); return; }
+        done({ v: Math.round(performance.now() - t0) });
+      });
+      T(() => {
+        green = true; t0 = performance.now();
+        pad.className = 'pad green'; pad.firstChild.textContent = 'JETZT!';
+        T(() => done({ fail: true, why: 'zu langsam' }), 2500);
+      }, delay);
+    }
+  },
+
+  sieben: {
+    title: 'Tipp die 7', rule: 'Finde die einzige 7 zwischen all den Zahlen. Falsche Zahl heißt trinken!', max: 9000,
+    run(el, r, done){
+      const pool = [1,1,2,3,4,4,5,6,8,9];
+      const nums = [7]; for(let i = 0; i < 24; i++) nums.push(pool[Math.floor(r() * pool.length)]);
+      shuffle(nums, r);
+      el.innerHTML = '<div class="grid">' + nums.map(n => {
+        const rot = Math.round((r() - .5) * 70), sc = (0.7 + r() * 0.55).toFixed(2);
+        return `<button class="cell" data-n="${n}"><span style="display:inline-block;transform:rotate(${rot}deg) scale(${sc})">${n}</span></button>`;
+      }).join('') + '</div>';
+      const t0 = performance.now();
+      el.querySelectorAll('.cell').forEach(b => b.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        const n = +b.dataset.n;
+        if(n === 7){ b.classList.add('hit'); done({ v: Math.round(performance.now() - t0) }); }
+        else { b.classList.add('miss'); done({ fail: true, why: 'falsche Zahl (' + n + ')' }); }
+      }));
+      T(() => done({ fail: true, why: 'zu langsam' }), 8000);
+    }
+  },
+
+  zwanzig: {
+    title: '20× tippen', rule: 'Tipp 20-mal so schnell du kannst! Der Schnellste verteilt 2.', max: 12000, gives: 2,
+    show: x => sec(x.v),
+    run(el, r, done){
+      let c = 0;
+      el.innerHTML = '<button class="tapbig" id="tb"><b id="tc">0</b><small>von 20</small></button>';
+      const t0 = performance.now();
+      $('#tb').addEventListener('pointerdown', e => {
+        e.preventDefault(); c++; $('#tc').textContent = c;
+        if(c >= 20) done({ v: Math.round(performance.now() - t0) });
+      });
+      T(() => done({ fail: true, why: 'nur ' + c + ' von 20' }), 10000);
+    }
+  },
+
+  maulwurf: {
+    title: 'Maulwurf hauen', rule: 'Hau 5 Maulwürfe so schnell du kannst! Daneben kostet Zeit. Der Schnellste verteilt 2.', max: 14000, gives: 2,
+    show: x => sec(x.v),
+    run(el, r, done){
+      const seq = []; while(seq.length < 12){ const p = Math.floor(r() * 25); if(p !== seq[seq.length - 1]) seq.push(p); }
+      el.innerHTML = '<div class="score-line" id="ml">0 / 5</div><div class="holes">' +
+        Array.from({ length: 25 }, (_, i) => `<button class="hole" data-i="${i}"><span>🐹</span></button>`).join('') + '</div>';
+      const holes = [...el.querySelectorAll('.hole')];
+      let i = 0, hits = 0, pen = 0, up = -1;
+      const t0 = performance.now();
+      const pop = () => { up = seq[i]; holes[up].classList.add('up'); };
+      holes.forEach((h, idx) => h.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        if(idx === up){
+          h.classList.remove('up'); h.classList.add('bonk'); up = -1; hits++; i++;
+          $('#ml').textContent = hits + ' / 5';
+          T(() => h.classList.remove('bonk'), 150);
+          if(hits >= 5){ done({ v: Math.round(performance.now() - t0 + pen) }); return; }
+          T(pop, 110);
+        } else {
+          pen += 500; h.classList.add('miss'); T(() => h.classList.remove('miss'), 200);
+        }
+      }));
+      pop();
+      T(() => done({ fail: true, why: 'nur ' + hits + ' von 5' }), 12000);
+    }
+  },
+
+  kabel: {
+    title: 'Kabelsalat', rule: 'Welcher Stecker führt zur Bombe? Verfolge das Kabel und tipp den richtigen Stecker an. Falscher Stecker heißt trinken!', max: 12500,
+    run(el, r, done){
+      const N = 8, X = i => 30 + i * (340 / 7), TOP = 52, BOT = 420;
+      const ends = shuffle([...Array(N).keys()], r);
+      const bomb = Math.floor(r() * N), correct = ends.indexOf(bomb);
+      let paths = '';
+      for(let i = 0; i < N; i++){
+        const x0 = X(i), x3 = X(ends[i]), m1 = 15 + r() * 370, m2 = 15 + r() * 370, m3 = 15 + r() * 370;
+        const y1 = TOP + 90, y2 = TOP + 185, y3 = TOP + 280;
+        paths += `<path d="M${x0} ${TOP} C${x0} ${TOP + 45} ${m1} ${y1 - 45} ${m1} ${y1} S${m2} ${y2 - 45} ${m2} ${y2} S${m3} ${y3 - 45} ${m3} ${y3} S${x3} ${BOT - 40} ${x3} ${BOT}"/>`;
+      }
+      let plugs = '', hits = '', dots = '';
+      for(let i = 0; i < N; i++){
+        plugs += `<rect x="${X(i) - 13}" y="${TOP - 26}" width="26" height="26" rx="5" fill="#5A6596"/>`;
+        hits += `<rect class="plug" data-i="${i}" x="${X(i) - 22}" y="0" width="44" height="${TOP + 30}" fill="transparent"/>`;
+        if(i !== bomb) dots += `<circle cx="${X(i)}" cy="${BOT + 6}" r="6" fill="#5A6596"/>`;
+      }
+      const bx = X(bomb);
+      el.innerHTML = `<svg viewBox="0 0 400 470" style="width:min(94vw,440px);height:auto;touch-action:none">
+        <g fill="none" stroke="#AEB6D4" stroke-width="5" stroke-linecap="round">${paths}</g>
+        ${plugs}${dots}
+        <circle cx="${bx}" cy="${BOT + 24}" r="22" fill="#0B0F1F" stroke="#FF4D5E" stroke-width="3"/>
+        <path d="M${bx + 12} ${BOT + 6} q10 -12 6 -20" fill="none" stroke="#AEB6D4" stroke-width="3"/>
+        <circle cx="${bx + 18}" cy="${BOT - 16}" r="5" fill="#FFB627"/>
+        ${hits}</svg>`;
+      const t0 = performance.now();
+      el.querySelectorAll('.plug').forEach(p => p.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        const i = +p.dataset.i;
+        const rect = el.querySelectorAll('rect[rx]')[i];
+        if(i === correct){ rect.setAttribute('fill', '#22D37A'); done({ v: Math.round(performance.now() - t0) }); }
+        else { rect.setAttribute('fill', '#FF4D5E'); done({ fail: true, why: 'falscher Stecker 💥' }); }
+      }));
+      T(() => done({ fail: true, why: 'Bombe explodiert 💥' }), 10000);
+    }
+  },
+
+  zapfen: {
+    title: 'Bier zapfen', rule: 'Finger aufs Glas halten zum Zapfen und genau an der roten Linie loslassen. Überlaufen heißt trinken!', max: 11000,
+    show: x => x.v.toFixed(1).replace('.', ',') + ' % daneben',
+    run(el, r, done){
+      const target = 55 + r() * 30;
+      el.innerHTML = `<div class="glass" id="gl"><div class="mark" style="bottom:${target}%"></div><div class="fill empty" id="fl"></div></div><p class="hint" id="zh">Finger draufhalten …</p>`;
+      const gl = $('#gl'), fl = $('#fl');
+      let level = 0, holding = false, finished = false, last = 0;
+      const finish = () => { if(finished) return; finished = true; holding = false; done({ v: Math.round(Math.abs(level - target) * 10) / 10 }); };
+      gl.addEventListener('pointerdown', e => {
+        e.preventDefault(); if(finished || holding) return;
+        holding = true; last = performance.now(); fl.classList.remove('empty'); $('#zh').textContent = 'Zapfen … loslassen an der Linie!';
+        try{ gl.setPointerCapture(e.pointerId); }catch(_){}
+        loop(t => {
+          if(!holding) return false;
+          level += (t - last) * 0.04; last = t;
+          if(level >= 100){ level = 100; fl.style.height = '100%'; finished = true; holding = false; done({ fail: true, why: 'übergelaufen 🍺' }); return false; }
+          fl.style.height = level + '%';
+        });
+      });
+      const up = () => { if(holding) finish(); };
+      gl.addEventListener('pointerup', up); gl.addEventListener('pointercancel', up);
+      T(() => { if(holding) finish(); else if(!finished){ finished = true; done({ fail: true, why: 'nicht gezapft' }); } }, 9000);
+    }
+  },
+
+  stopp: {
+    title: '10-Sekunden-Stopp', rule: 'Die Uhr verschwindet nach 3 Sekunden. Drück genau bei 10,00 auf Stopp!', max: 18000,
+    show: x => sec(x.x),
+    run(el, r, done){
+      el.innerHTML = '<div class="clock" id="clk">0,00</div><button class="tapbig" id="sb"><b>STOPP</b></button>';
+      const clk = $('#clk'), t0 = performance.now();
+      loop(t => { const e = t - t0; clk.textContent = e < 3000 ? sec(e).replace(' s', '') : '?,??'; });
+      $('#sb').addEventListener('pointerdown', e => {
+        e.preventDefault();
+        const x = Math.round(performance.now() - t0);
+        clearTimers(); clk.textContent = sec(x).replace(' s', '');
+        done({ v: Math.abs(x - 10000), x });
+      });
+      T(() => done({ fail: true, why: 'nicht gestoppt' }), 16000);
+    }
+  },
+
+  zone: {
+    title: 'Treffer-Zone', rule: 'Der Strich saust hin und her. Tipp, wenn er genau in der Mitte ist!', max: 9000,
+    show: x => (100 - x.v * 2).toFixed(0) + ' % genau',
+    run(el, r, done){
+      const period = 800 + r() * 500, phase = r();
+      el.innerHTML = '<div class="track"><div class="zone"></div><div class="needle" id="nd"></div></div><button class="tapbig" id="zb"><b>JETZT</b></button>';
+      const nd = $('#nd'); let pos = 0;
+      const t0 = performance.now();
+      loop(t => { const p = (((t - t0) / period) + phase) % 1; pos = p < .5 ? p * 200 : (1 - p) * 200; nd.style.left = pos + '%'; });
+      $('#zb').addEventListener('pointerdown', e => {
+        e.preventDefault(); const v = Math.round(Math.abs(pos - 50) * 10) / 10;
+        clearTimers(); nd.style.left = pos + '%'; done({ v });
+      });
+      T(() => done({ fail: true, why: 'nicht getippt' }), 7000);
+    }
+  },
+
+  turm: {
+    title: 'Bierdeckel-Turm', rule: 'Du hast 20 Sekunden. Tipp, um den Deckel fallen zu lassen – aber nur im richtigen Moment! Was übersteht, fällt ab, und daneben heißt: Turm vorbei. Höchster Turm verteilt 2.', max: 23000, gives: 2, better: 'high',
+    show: x => x.v + ' Deckel',
+    fb: res => `<div class="fb good">${res.v} Deckel</div>`,
+    run(el, r, done){
+      const W = 280, PH = 20, speed0 = 0.22 + r() * 0.04;
+      el.innerHTML = `<div class="tstat"><span id="th">0 Deckel</span><span id="tt">20 s</span></div><div class="tower" id="tw" style="width:${W}px"><div class="tin" id="tin"></div></div><p class="hint">Irgendwo tippen zum Fallenlassen</p>`;
+      const area = box(el);
+      const tin = $('#tin'), tw = $('#tw');
+      const H = tw.clientHeight;
+      const stack = [{ x: 50, w: 180 }];
+      const mk = (x, w, i, cls) => { const d = document.createElement('div'); d.className = 'coaster ' + (cls || ''); d.style.left = x + 'px'; d.style.width = w + 'px'; d.style.bottom = (i * PH) + 'px'; tin.appendChild(d); return d; };
+      mk(50, 180, 0);
+      let mov = null, mx = 0, dir = 1, last = performance.now(), over = false, lock = 0;
+      const t0 = performance.now();
+      const spawn = () => {
+        const top = stack[stack.length - 1];
+        const lo = -top.w * 0.85, hi = W - top.w * 0.15;
+        mov = mk(0, top.w, stack.length, 'mov'); mx = lo + r() * (hi - lo); dir = r() < .5 ? 1 : -1;
+        const shift = Math.max(0, stack.length * PH + PH * 3 - H);
+        tin.style.transform = `translateY(${shift}px)`;
+      };
+      const finish = () => { if(over) return; over = true; if(mov) mov.remove(); done({ v: stack.length - 1 }); };
+      spawn();
+      loop(t => {
+        if(over) return false;
+        const dt = t - last; last = t;
+        const top = stack[stack.length - 1];
+        const lo = -top.w * 0.85, hi = W - top.w * 0.15;
+        const sp = speed0 + stack.length * 0.012;
+        mx += dir * sp * dt;
+        if(mx <= lo){ mx = lo; dir = 1; } if(mx >= hi){ mx = hi; dir = -1; }
+        mov.style.left = mx + 'px';
+        $('#tt').textContent = Math.ceil(Math.max(0, 20 - (t - t0) / 1000)) + ' s';
+      });
+      area.addEventListener('pointerdown', e => {
+        e.preventDefault(); const t = performance.now();
+        if(over || !mov || t < lock) return;
+        lock = t + 450;
+        const top = stack[stack.length - 1];
+        const L = Math.max(mx, top.x), R = Math.min(mx + top.w, top.x + top.w);
+        if(R - L < 4){ mov.classList.add('drop'); mov.style.transform = 'translateY(200px)'; mov = null; finish(); return; }
+        mov.className = 'coaster'; mov.style.left = L + 'px'; mov.style.width = (R - L) + 'px';
+        stack.push({ x: L, w: R - L }); $('#th').textContent = (stack.length - 1) + ' Deckel';
+        spawn();
+      });
+      T(finish, 20000);
+    }
+  },
+
+  kreis: {
+    title: 'Perfekter Kreis', rule: 'Mal mit dem Finger in einem Zug einen möglichst perfekten Kreis – am besten in die Mitte des Feldes!', max: 12000, better: 'high',
+    show: x => x.v.toFixed(1).replace('.', ',') + ' %',
+    fb: res => res.fail ? `<div class="fb bad">😬 ${esc(res.why)}</div>` : `<div class="fb good">${res.v.toFixed(1).replace('.', ',')} % rund</div>`,
+    run(el, r, done){
+      el.innerHTML = '<canvas class="cv" id="cv"></canvas><div class="cvhint">Mal deinen Kreis in die Mitte des Feldes</div>';
+      const cv = $('#cv'), dpr = window.devicePixelRatio || 1;
+      cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr;
+      const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+      ctx.lineWidth = 7; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#FFB627';
+      let pts = [], drawing = false, finished = false;
+      const pos = e => { const b = cv.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
+      cv.addEventListener('pointerdown', e => {
+        e.preventDefault(); if(finished) return;
+        drawing = true; pts = [pos(e)]; ctx.clearRect(0, 0, cv.width, cv.height); ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+        try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+      });
+      cv.addEventListener('pointermove', e => { if(!drawing) return; const p = pos(e); pts.push(p); ctx.lineTo(p.x, p.y); ctx.stroke(); });
+      const up = () => {
+        if(!drawing) return; drawing = false; finished = true;
+        if(pts.length < 15){ done({ fail: true, why: 'kein Kreis' }); return; }
+        const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length, cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+        const rs = pts.map(p => Math.hypot(p.x - cx, p.y - cy));
+        const mean = rs.reduce((s, v) => s + v, 0) / rs.length;
+        if(mean < 35){ done({ fail: true, why: 'viel zu klein' }); return; }
+        const sd = Math.sqrt(rs.reduce((s, v) => s + (v - mean) ** 2, 0) / rs.length);
+        let turn = 0;
+        for(let i = 1; i < pts.length; i++){
+          let d = Math.atan2(pts[i].y - cy, pts[i].x - cx) - Math.atan2(pts[i-1].y - cy, pts[i-1].x - cx);
+          if(d > Math.PI) d -= 2 * Math.PI; if(d < -Math.PI) d += 2 * Math.PI; turn += d;
+        }
+        const cover = Math.min(1, Math.abs(turn) / (2 * Math.PI));
+        const gap = Math.hypot(pts[0].x - pts[pts.length-1].x, pts[0].y - pts[pts.length-1].y) / mean;
+        const closePen = gap > 0.4 ? Math.max(0.6, 1 - (gap - 0.4) * 0.4) : 1;
+        let score = Math.max(0, 1 - (sd / mean) * 2.2) * cover * closePen * 100;
+        score = Math.min(99.9, Math.round(score * 10) / 10);
+        ctx.strokeStyle = 'rgba(34,211,122,.85)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, mean, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = '#22D37A'; ctx.font = '600 14px Rubik, sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('Dein Idealkreis', cx, Math.max(16, cy - mean - 10));
+        T(() => done({ v: score }), 900);
+      };
+      cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+      T(() => { if(!finished){ finished = true; drawing = false; done({ fail: true, why: 'kein Kreis' }); } }, 10000);
+    }
+  },
+
+  flatter: {
+    title: 'Flatter-Korken', rule: 'Jedes Tippen lässt den Korken hochhüpfen. Flieg durch die Lücken! Wer am kürzesten fliegt, trinkt. Der Weiteste verteilt 2.', max: 24000, gives: 2, better: 'high',
+    show: x => x.v + ' m',
+    fb: res => `<div class="fb ${res.crash ? 'bad' : 'good'}">${res.crash ? '💥 ' : ''}${res.v} m</div>`,
+    run(el, r, done){
+      const LW = 360, LH = 560, FLOOR = 520, BX = 90;
+      el.innerHTML = '<canvas class="cv" id="fc"></canvas><div class="flyscore" id="fs">0 m</div>';
+      const cv = $('#fc');
+      const { ctx } = fitCanvas(cv, LW, LH);
+      const obs = [];
+      for(let k = 0; k < 60; k++){ const gap = Math.max(128, 178 - k * 3); obs.push({ x: 430 + k * 215, gy: 130 + r() * (FLOOR - 260), gap }); }
+      let y = 260, vy = 0, dist = 0, started = false, over = false, last = performance.now();
+      const t0 = performance.now();
+      const finish = crash => { if(over) return; over = true; done({ v: Math.floor(dist / 40), crash: !!crash }); };
+      cv.addEventListener('pointerdown', e => { e.preventDefault(); if(over) return; started = true; vy = -430; });
+      loop(t => {
+        const dt = Math.min(0.035, (t - last) / 1000); last = t;
+        const el2 = (t - t0) / 1000;
+        if(!over){
+          if(started || el2 > 1.5){ vy += 1500 * dt; y += vy * dt; }
+          const speed = 150 + el2 * 8;
+          dist += speed * dt;
+          if(y < 12){ y = 12; vy = 0; }
+          if(y > FLOOR - 12) finish(true);
+          for(const o of obs){
+            const ox = o.x - dist;
+            if(ox > BX + 40 || ox + 60 < BX - 14) continue;
+            if(BX + 12 > ox && BX - 12 < ox + 60 && (y - 11 < o.gy - o.gap / 2 || y + 11 > o.gy + o.gap / 2)) finish(true);
+          }
+          if(el2 >= 20) finish(false);
+          $('#fs').textContent = Math.floor(dist / 40) + ' m';
+        }
+        ctx.fillStyle = '#18203D'; ctx.fillRect(0, 0, LW, LH);
+        ctx.fillStyle = '#1F2848'; for(let i = 0; i < 8; i++){ const sx = ((i * 70 - dist * 0.3) % 560 + 560) % 560 - 40; ctx.fillRect(sx, 0, 26, FLOOR); }
+        for(const o of obs){
+          const ox = o.x - dist; if(ox > LW || ox < -70) continue;
+          const top = o.gy - o.gap / 2, bot = o.gy + o.gap / 2;
+          ctx.fillStyle = '#C9CEE0'; ctx.fillRect(ox + 18, 0, 24, top - 26); ctx.fillRect(ox, top - 30, 60, 30);
+          ctx.fillStyle = '#FFB627'; ctx.fillRect(ox + 22, top - 2, 16, 8);
+          ctx.fillStyle = '#8A5A2B'; ctx.fillRect(ox, bot, 60, 18); ctx.fillRect(ox + 24, bot + 18, 12, FLOOR - bot - 18);
+          ctx.fillStyle = '#6B4421'; ctx.fillRect(ox + 8, FLOOR - 8, 44, 8);
+        }
+        ctx.fillStyle = '#3A2614'; ctx.fillRect(0, FLOOR, LW, LH - FLOOR);
+        ctx.fillStyle = '#5C3D20'; ctx.fillRect(0, FLOOR, LW, 6);
+        ctx.save(); ctx.translate(BX, y); ctx.rotate(Math.max(-0.5, Math.min(0.9, vy / 700)));
+        ctx.fillStyle = '#C8935A'; ctx.beginPath(); ctx.ellipse(0, 0, 16, 11, 0, 0, 7); ctx.fill();
+        ctx.fillStyle = '#A8733E'; ctx.fillRect(-10, -9, 3, 18); ctx.fillRect(-2, -10, 3, 20); ctx.fillRect(6, -9, 3, 18);
+        ctx.restore();
+        if(over) return false;
+      });
+      T(() => finish(false), 21000);
+    }
+  },
+
+  schieben: {
+    title: 'Bierglas schieben', rule: 'Wisch das Glas nach oben über die Theke. Es soll so nah wie möglich an der Kante stehen bleiben. Runtergefallen heißt trinken!', max: 16000,
+    show: x => x.v.toFixed(1).replace('.', ',') + ' cm vor der Kante',
+    fb: res => res.fail ? `<div class="fb bad">😬 ${esc(res.why)}</div>` : `<div class="fb good">${res.v.toFixed(1).replace('.', ',')} cm</div>`,
+    run(el, r, done){
+      const LW = 300, LH = 560, EDGE = 60, START = 470, GR = 24;
+      const fric = 0.0017 + r() * 0.0004;
+      el.innerHTML = '<canvas class="cv" id="sc"></canvas><div class="cvhint">Glas nach oben wischen</div>';
+      const cv = $('#sc');
+      const { ctx, s } = fitCanvas(cv, LW, LH);
+      let gy = START, v = 0, state = 'wait', track = [], fallY = 0;
+      cv.addEventListener('pointerdown', e => {
+        e.preventDefault(); if(state !== 'wait') return;
+        state = 'drag'; track = [{ y: e.clientY, t: performance.now() }];
+        try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+      });
+      cv.addEventListener('pointermove', e => {
+        if(state !== 'drag') return;
+        track.push({ y: e.clientY, t: performance.now() });
+        const dy = (track[track.length - 1].y - track[0].y) / s;
+        gy = Math.min(START, Math.max(START - 80, START + dy));
+      });
+      const release = () => {
+        if(state !== 'drag') return;
+        const tn = performance.now(), recent = track.filter(p => tn - p.t < 110);
+        const a = recent[0] || track[0], b = track[track.length - 1];
+        const vel = (a.y - b.y) / Math.max(16, b.t - a.t) / s;
+        if(vel < 0.08){ state = 'wait'; gy = START; return; }
+        v = Math.min(3.5, vel); state = 'slide';
+      };
+      cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release);
+      let last = performance.now(), sent = false;
+      loop(t => {
+        const dt = Math.min(40, t - last); last = t;
+        if(state === 'slide'){
+          gy -= v * dt; v -= fric * dt;
+          if(gy < EDGE){ state = 'fall'; }
+          else if(v <= 0){ state = 'stop'; if(!sent){ sent = true; T(() => done({ v: Math.round((gy - EDGE) / 4 * 10) / 10 }), 500); } }
+        }
+        if(state === 'fall'){ fallY += dt * 0.5; if(!sent && fallY > 60){ sent = true; done({ fail: true, why: 'runtergefallen 💥' }); } }
+        ctx.fillStyle = '#18203D'; ctx.fillRect(0, 0, LW, LH);
+        ctx.fillStyle = '#7A4E26'; ctx.fillRect(40, EDGE, 220, LH - EDGE);
+        ctx.strokeStyle = '#6A421F'; ctx.lineWidth = 2;
+        for(let i = 0; i < 9; i++){ ctx.beginPath(); ctx.moveTo(60 + i * 22, EDGE); ctx.lineTo(56 + i * 22, LH); ctx.stroke(); }
+        ctx.fillStyle = '#FF4D5E'; ctx.fillRect(40, EDGE - 4, 220, 6);
+        ctx.fillStyle = '#9AA3C7'; ctx.font = '600 13px Rubik, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('KANTE', 150, EDGE - 14);
+        const yy = gy - (state === 'fall' ? fallY : 0), rr = state === 'fall' ? Math.max(6, GR - fallY * 0.3) : GR;
+        ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.arc(150, yy, rr + 4, 0, 7); ctx.fill();
+        ctx.fillStyle = '#F2A516'; ctx.beginPath(); ctx.arc(150, yy, rr, 0, 7); ctx.fill();
+        ctx.fillStyle = '#FFF6E0'; ctx.beginPath(); ctx.arc(150, yy, rr * 0.6, 0, 7); ctx.fill();
+        if(sent && state !== 'slide') return false;
+      });
+      T(() => { if(state === 'wait' || state === 'drag'){ sent = true; state = 'stop'; done({ fail: true, why: 'nicht geschoben' }); } }, 10000);
+    }
+  },
+
+  knopf: {
+    title: 'Knopf-Roulette', rule: 'Drück einen der vier Knöpfe. Einer davon ist der Verliererknopf …', max: 9000,
+    show: x => ['🟥','🟦','🟨','🟩'][x.pick] || '–',
+    fb: res => res.fail ? `<div class="fb bad">😬 ${esc(res.why)}</div>` : `<div class="fb meh">${['🟥','🟦','🟨','🟩'][res.pick]} gewählt<br>🤞 Daumen drücken</div>`,
+    run(el, r, done){
+      const cols = ['#FF4D5E', '#3B82F6', '#FFB627', '#22D37A'];
+      el.innerHTML = '<div class="btns4">' + cols.map((c, i) => `<button class="bigbtn" data-i="${i}" style="background:${c}" aria-label="Knopf ${i + 1}"></button>`).join('') + '</div>';
+      el.querySelectorAll('.bigbtn').forEach(b => b.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        el.querySelectorAll('.bigbtn').forEach(x => x.classList.add(x === b ? 'picked' : 'dim'));
+        done({ pick: +b.dataset.i });
+      }));
+      T(() => done({ fail: true, why: 'nicht gedrückt' }), 7000);
+    },
+    eval(rows, r){
+      const bad = Math.floor(rng(r.seed + 7)() * 4);
+      const losers = rows.filter(x => x.fail || x.pick === bad).map(x => x.id);
+      const sorted = rows.filter(x => !x.fail && x.pick !== bad).concat(rows.filter(x => x.fail || x.pick === bad));
+      return { losers, rows: sorted, note: 'Der Verliererknopf war ' + ['🟥','🟦','🟨','🟩'][bad] };
+    }
+  },
+
+  prost: {
+    title: 'Prost im Takt', rule: 'Kein Countdown! Zählt laut zusammen runter und tippt alle GLEICHZEITIG.', max: 15000,
+    show: x => '± ' + x.v + ' ms',
+    fb: res => res.fail ? `<div class="fb bad">😬 ${esc(res.why)}</div>` : `<div class="fb meh">Prost! 🍻</div>`,
+    run(el, r, done){
+      el.innerHTML = '<p class="task">Zählt zusammen runter …</p><button class="tapbig" id="pb"><b>PROST</b><small>🍻</small></button>';
+      $('#pb').addEventListener('pointerdown', e => { e.preventDefault(); done({ t: Math.round(now()) }); });
+      T(() => done({ fail: true, why: 'nicht getippt' }), 13000);
+    },
+    eval(rows){
+      const ok = rows.filter(x => !x.fail), fails = rows.filter(x => x.fail);
+      const mean = ok.reduce((s, x) => s + x.t, 0) / (ok.length || 1);
+      ok.forEach(x => { x.v = Math.round(Math.abs(x.t - mean)); });
+      ok.sort((a, b) => a.v - b.v);
+      const losers = fails.map(x => x.id);
+      if(ok.length > 1) losers.push(ok[ok.length - 1].id);
+      return { losers, rows: ok.concat(fails), note: 'Abstand zum gemeinsamen Durchschnitt' };
+    }
+  },
+
+  tauziehen: {
+    title: 'Tauziehen', rule: 'Zwei Teams! Tippt 10 Sekunden wie verrückt. Das schwächere Team trinkt.', max: 13500,
+    show: x => (x.taps || 0) + ' Taps',
+    fb: res => `<div class="fb meh">${res.taps || 0} Taps 💪</div>`,
+    run(el, r, done, round){
+      const { A, B } = teamsOf(round);
+      const mine = A.includes(pid) ? 'A' : 'B';
+      const mates = (mine === 'A' ? A : B).filter(id => id !== pid).map(nameOf);
+      const col = mine === 'A' ? 'var(--red)' : 'var(--blue)';
+      el.innerHTML = `<div class="team-lbl" style="color:${col}">Team ${mine === 'A' ? 'Rot' : 'Blau'}</div>
+        <div class="team-mates">${mates.length ? 'mit ' + esc(mates.join(', ')) : 'Du ziehst allein!'}</div>
+        <div class="ropebar"><div class="knot" id="knot"></div></div>
+        <button class="tapbig" id="tz" style="background:${col};box-shadow:0 10px 0 rgba(0,0,0,.35)"><b id="tzc">0</b><small>ZIEH!</small></button>`;
+      let c = 0, sentC = 0;
+      $('#tz').addEventListener('pointerdown', e => { e.preventDefault(); c++; $('#tzc').textContent = c; });
+      timers.push(setInterval(() => { if(c !== sentC){ sentC = c; roomRef.child('live/r' + round.n + '/' + pid).set(c); } }, 300));
+      T(() => done({ taps: c }), 10000);
+    },
+    eval(rows, r){
+      const { A, B } = teamsOf(r);
+      const sum = ids => ids.reduce((s, id) => { const x = rows.find(y => y.id === id); return s + ((x && x.taps) || 0); }, 0);
+      const sa = sum(A), sb = sum(B);
+      rows.forEach(x => { x.v = x.taps || 0; if(x.fail) x.why = 'keine Reaktion'; });
+      rows.sort((a, b) => (b.taps || 0) - (a.taps || 0));
+      let losers = [];
+      if(B.length && sa !== sb) losers = sa < sb ? A : B;
+      return { losers, rows, note: `🟥 Team Rot ${sa} : ${sb} Team Blau 🟦` };
+    }
+  },
+
+  rad: {
+    title: 'Glücksrad', rule: 'Einer wird ausgelost und dreht am Glücksrad. Alle fiebern mit!', max: 30000, custom: true,
+    run(el, rr, r){
+      const sp = r.spinner, idx = Math.floor(rng(r.seed + 3)() * RAD.length);
+      const cx = 150, R = 142, segs = RAD.map((s, i) => {
+        const a0 = (-90 + i * 40) * Math.PI / 180, a1 = (-90 + (i + 1) * 40) * Math.PI / 180, am = (a0 + a1) / 2;
+        const p = (a, rad) => `${cx + Math.cos(a) * rad} ${cx + Math.sin(a) * rad}`;
+        const deg = -90 + i * 40 + 20 + 90;
+        return `<path d="M${cx} ${cx} L${p(a0, R)} A${R} ${R} 0 0 1 ${p(a1, R)} Z" fill="${i % 2 ? '#2A3560' : '#1F2848'}" stroke="#141B33" stroke-width="2"/>
+          <g transform="translate(${cx + Math.cos(am) * 98} ${cx + Math.sin(am) * 98}) rotate(${deg})"><text text-anchor="middle" font-size="26" y="4">${s.e}</text><text text-anchor="middle" font-size="11" y="22" fill="#FFF6E0" font-family="Rubik, sans-serif" font-weight="600">${s.t}</text></g>`;
+      }).join('');
+      el.innerHTML = `<div class="sp"><div class="wheelwrap"><div class="pointer"></div><svg viewBox="0 0 300 300"><g id="wh">${segs}<circle cx="150" cy="150" r="22" fill="#FFB627"/></g></svg></div><div id="radAct"></div></div>`;
+      const act = $('#radAct'), wh = $('#wh');
+      const final = 360 * 5 - (idx * 40 + 20);
+      let spinning = false;
+      const draw = () => {
+        const a = room.answers && room.answers['r' + r.n] && room.answers['r' + r.n][sp];
+        if(!a){
+          act.innerHTML = sp === pid
+            ? `<button class="btn" id="spinBtn">🎡 Drehen!</button>`
+            : `<p class="rule">${nm(sp)} dreht gleich am Rad …</p>`;
+          const b = $('#spinBtn'); if(b) b.onclick = () => { b.disabled = true; roomRef.child('answers/r' + r.n + '/' + sp).set({ at: Math.round(now()) }); };
+          return;
+        }
+        if(spinning) return; spinning = true;
+        act.innerHTML = `<p class="rule">${nm(sp)} dreht … 🤞</p>`;
+        loop(() => {
+          const p = Math.min(1, Math.max(0, (now() - a.at) / SPIN_MS)), e = 1 - Math.pow(1 - p, 3);
+          wh.setAttribute('transform', `rotate(${final * e} 150 150)`);
+          if(p >= 1){ act.innerHTML = `<div class="boom">${RAD[idx].e} ${RAD[idx].t}!</div>`; return false; }
+        });
+      };
+      liveHook = draw; draw();
+    },
+    eval(rows, r){
+      const sp = r.spinner, o = RAD[Math.floor(rng(r.seed + 3)() * RAD.length)];
+      const parts = Object.keys(r.parts || {}), others = parts.filter(id => id !== sp);
+      const R2 = rng(r.seed + 11);
+      const res = { kind: o.k, head: `${o.e} ${o.t}!`, note: nameOf(sp) + ' hat gedreht', base: {}, rows: [] };
+      if(o.k === 'lokal') others.forEach(id => res.base[id] = 1);
+      if(o.k === 'verteilen'){ res.winner = sp; res.gives = 3; }
+      if(o.k === 'pech') res.base[sp] = 2;
+      if(o.k === 'prost') parts.forEach(id => res.base[id] = 1);
+      if(o.k === 'opfer'){ const v = parts[Math.floor(R2() * parts.length)]; res.victim = v; res.base[v] = 2; }
+      if(o.k === 'verkuppelt' && others.length){ const p2 = others[Math.floor(R2() * others.length)]; res.links = [[sp, p2]]; }
+      if(o.k === 'verkuppelt' && !others.length) res.note = 'Niemand da zum Verkuppeln 😅';
+      if(o.k === 'regel') res.ruleBy = sp;
+      if(o.k === 'jackpot') res.shieldTo = [sp];
+      return res;
+    }
+  },
+
+  welle: {
+    title: 'Gleiche Wellenlänge', rule: 'Einer nennt eine Kategorie, alle schreiben eine Antwort. Wer das Gleiche schreibt, ist 3 Runden lang Partner: Trinkt einer, trinkt der andere mit!', max: Infinity, custom: true, special: true,
+    run(el, rr, r){
+      const setter = r.setter, endBtn = isHost ? '<button class="btn ghost small" onclick="endRoundNow()">Runde beenden</button>' : '';
+      if(!r.category){
+        if(pid === setter){
+          el.innerHTML = `<div class="sp"><div class="gname">Du bist dran!</div><p class="rule">Nenn eine Kategorie, zu der alle etwas schreiben.</p><input id="catIn" maxlength="60" placeholder="z. B. Automarken" autocomplete="off"><button class="btn" id="catBtn">Los geht’s</button>${endBtn}</div>`;
+          $('#catBtn').onclick = () => { const t = $('#catIn').value.trim(); if(!t){ $('#catIn').focus(); return; } roomRef.child('round/category').set(t); };
+        } else {
+          el.innerHTML = `<div class="sp"><div class="gname">🔗 Gleiche Wellenlänge</div><p class="rule">${nm(setter)} denkt sich eine Kategorie aus …</p>${endBtn}</div>`;
+        }
+        return;
+      }
+      const wait = () => `<p class="wc">Fertig: <b id="wc"></b></p><div class="missing" id="miss"></div>${endBtn}`;
+      const mine = myAnswer(r);
+      if(mine){ el.innerHTML = `<div class="sp"><div class="gname">🔗 ${esc(r.category)}</div><div class="qbox">Deine Antwort: ${esc(mine.text)}</div>${wait()}</div>`; updateLive(); return; }
+      el.innerHTML = `<div class="sp"><div class="gname">🔗 ${esc(r.category)}</div><p class="rule">Was fällt dir als Erstes ein?</p><input id="ansIn" maxlength="50" placeholder="Deine Antwort" autocomplete="off"><button class="btn" id="ansBtn">Abschicken</button>${wait()}</div>`;
+      $('#ansBtn').onclick = () => {
+        const t = $('#ansIn').value.trim(); if(!t){ $('#ansIn').focus(); return; }
+        roomRef.child('answers/r' + r.n + '/' + pid).set({ text: t });
+        el.innerHTML = `<div class="sp"><div class="gname">🔗 ${esc(r.category)}</div><div class="qbox">Deine Antwort: ${esc(t)}</div>${wait()}</div>`; updateLive();
+      };
+      updateLive();
+    },
+    eval(rows, r){
+      if(!r.category) return { kind: 'welle', base: {}, groups: [], rows: [], noDouble: true };
+      const ok = rows.filter(x => !x.fail && x.text), fails = rows.filter(x => x.fail || !x.text);
+      const groups = groupAnswers(ok);
+      const base = {}; fails.forEach(x => base[x.id] = 1);
+      return { kind: 'welle', base, groups, links: groups.filter(g => g.ids.length > 1).map(g => g.ids), rows: [], noDouble: true };
+    }
+  },
+
+  joker: {
+    title: 'Joker-Runde', rule: 'Schätzfrage! Wer am nächsten dran ist, gewinnt ein Schutzschild 🛡️ (max. 2).', max: Infinity, custom: true, special: true,
+    run(el, rr, r){
+      const q = QS[r.q], endBtn = isHost ? '<button class="btn ghost small" onclick="endRoundNow()">Runde beenden</button>' : '';
+      const wait = () => `<p class="wc">Fertig: <b id="wc"></b></p><div class="missing" id="miss"></div>${endBtn}`;
+      const mine = myAnswer(r);
+      const head = `<div class="gname">🃏 Joker-Runde</div><div class="qbox">${esc(q.q)}${q.u ? ' <span class="muted">(in ' + esc(q.u) + ')</span>' : ''}</div>`;
+      if(mine){ el.innerHTML = `<div class="sp">${head}<p>Deine Schätzung: <b>${num(mine.num)}</b></p>${wait()}</div>`; updateLive(); return; }
+      el.innerHTML = `<div class="sp">${head}<input id="numIn" inputmode="decimal" placeholder="Deine Schätzung" autocomplete="off"><button class="btn" id="numBtn">Abschicken</button><p class="err" id="numErr"></p>${wait()}</div>`;
+      $('#numBtn').onclick = () => {
+        const v = parseNum($('#numIn').value);
+        if(v === null){ $('#numErr').textContent = 'Bitte eine Zahl eingeben.'; return; }
+        roomRef.child('answers/r' + r.n + '/' + pid).set({ num: v });
+        el.innerHTML = `<div class="sp">${head}<p>Deine Schätzung: <b>${num(v)}</b></p>${wait()}</div>`; updateLive();
+      };
+      updateLive();
+    },
+    eval(rows, r){
+      const q = QS[r.q];
+      const ok = rows.filter(x => !x.fail && typeof x.num === 'number'), fails = rows.filter(x => x.fail || typeof x.num !== 'number');
+      ok.forEach(x => x.diff = Math.abs(x.num - q.a));
+      ok.sort((a, b) => a.diff - b.diff);
+      const best = ok.length ? ok[0].diff : null;
+      const winners = ok.filter(x => x.diff === best).map(x => x.id);
+      return { kind: 'joker', base: {}, shieldTo: winners, rows: ok.concat(fails), answer: q.a, unit: q.u, noDouble: true };
+    }
+  }
+};
+
+function parseNum(s){
+  s = String(s || '').replace(/\s/g, '');
+  if(!s) return null;
+  if(s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  else if(/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+  const v = parseFloat(s);
+  return isFinite(v) ? v : null;
+}
+function normAns(t){
+  return t.toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]/g, '');
+}
+function lev(a, b){
+  const m = a.length, n = b.length; if(!m) return n; if(!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for(let i = 1; i <= m; i++){
+    const cur = [i];
+    for(let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+function groupAnswers(rows){
+  const items = rows.map(x => ({ id: x.id, text: x.text, n: normAns(x.text) }));
+  const parent = items.map((_, i) => i);
+  const find = i => parent[i] === i ? i : (parent[i] = find(parent[i]));
+  for(let i = 0; i < items.length; i++) for(let j = i + 1; j < items.length; j++){
+    const a = items[i].n, b = items[j].n, L = Math.max(a.length, b.length);
+    const tol = L >= 8 ? 2 : L >= 4 ? 1 : 0;
+    if(a && b && (a === b || lev(a, b) <= tol)) parent[find(i)] = find(j);
+  }
+  const map = {};
+  items.forEach((it, i) => { const k = find(i); (map[k] = map[k] || { ids: [], texts: [] }); map[k].ids.push(it.id); map[k].texts.push(it.text); });
+  return Object.values(map).map(g => ({ ids: g.ids, text: [...new Set(g.texts)].join(' / ') })).sort((a, b) => b.ids.length - a.ids.length);
+}
+
+function valText(game, row){ const g = GAMES[game]; return g.show ? g.show(row) : row.v + ' ms'; }
+function defaultEval(rows, g){
+  const ok = rows.filter(x => !x.fail), fails = rows.filter(x => x.fail);
+  const hi = g.better === 'high';
+  ok.sort((a, b) => hi ? b.v - a.v : a.v - b.v);
+  let losers = [];
+  if(fails.length) losers = fails.map(x => x.id);
+  else if(ok.length > 1){
+    const worst = ok[ok.length - 1].v;
+    losers = ok.filter(x => x.v === worst).map(x => x.id);
+    if(losers.length === ok.length) losers = [];
+  }
+  const winner = (ok.length && rows.length > 1 && !losers.includes(ok[0].id)) ? ok[0].id : null;
+  return { losers, winner, gives: winner ? (g.gives || 0) : 0, rows: ok.concat(fails) };
+}
+
+/* ===================== Partner, Regeln, Schilde ===================== */
+function activeLinks(n){ return Object.values((room.meta && room.meta.links) || {}).filter(l => l.from < n && n <= l.until).map(l => l.a || []); }
+function partnersOf(id, n){ const s = new Set(); activeLinks(n).forEach(g => { if(g.includes(id)) g.forEach(o => { if(o !== id) s.add(o); }); }); return [...s]; }
+function activateShield(){
+  const me = room.players[pid] || {};
+  if(me.shieldOn){ alert('Dein Schutzschild ist schon aktiv. Es wehrt das nächste Mal ab, wenn du trinken müsstest.'); return; }
+  if(!(me.shields > 0)){ alert('Du hast gerade kein Schutzschild. Gewinn eins in der Joker-Runde (max. 2 gleichzeitig).'); return; }
+  if(confirm('🛡️ Schutzschild jetzt aktivieren? Es wehrt das nächste Mal ab, wenn du trinken müsstest.')){
+    roomRef.child('players/' + pid).update({ shields: me.shields - 1, shieldOn: true });
+  }
+}
+
+/* ===================== Host-Steuerung ===================== */
+function hostTick(){
+  if(!isHost || !room || room.meta.status !== 'playing' || hostBusy) return;
+  const r = room.round, t = now();
+  if(!r){ hostBusy = true; startRound().finally(() => hostBusy = false); return; }
+  if(r.phase !== 'play') return;
+  if(hostSpecial(r, t)) return;
+  const g = GAMES[r.game];
+  const ans = (room.answers && room.answers['r' + r.n]) || {};
+  if(r.game === 'rad'){
+    const a = ans[r.spinner];
+    if(!a){ if(t > r.startAt + 12000) roomRef.child('answers/r' + r.n + '/' + r.spinner).set({ at: Math.round(t), auto: true }); return; }
+    if(t >= a.at + SPIN_MS + 700){ hostBusy = true; evaluate().finally(() => hostBusy = false); }
+    return;
+  }
+  const parts = Object.keys(r.parts || {});
+  const all = parts.length > 0 && parts.every(p => ans[p]);
+  if((all && t >= r.startAt) || t >= r.startAt + g.max + 1500){ hostBusy = true; evaluate().finally(() => hostBusy = false); }
+}
+function nextRound(){ if(isHost && !hostBusy && room.round && room.round.phase === 'result'){ hostBusy = true; startRound().finally(() => hostBusy = false); } }
+function endRoundNow(){
+  if(!isHost || hostBusy || !room.round || room.round.phase !== 'play') return;
+  if(!confirm('Runde jetzt für alle beenden?')) return;
+  hostBusy = true; evaluate().finally(() => hostBusy = false);
+}
+async function startRound(){
+  const M = room.meta, r = room.round, n = (r ? r.n : 0) + 1;
+  const parts = {}; const P = room.players || {};
+  Object.entries(P).forEach(([id, p]) => { if(p.online) parts[id] = true; });
+  const ids = Object.keys(parts);
+  const pick = () => ids[Math.floor(Math.random() * ids.length)];
+  const up = {}; let round;
+  const base = { n, seed: Math.floor(Math.random() * 1e9), startAt: now() + INTRO_MS, phase: 'play', parts };
+  const gapFix = (next, other) => Math.abs(next - other) < 5 ? other + 5 : next;
+  if(n >= (M.nextWelle || 1e9)){
+    round = Object.assign(base, { game: 'welle', setter: pick() });
+    up['meta/nextWelle'] = gapFix(n + rint(17, 23), M.nextJoker || 0);
+  } else if(n >= (M.nextJoker || 1e9)){
+    const used = (M.usedQ || '').split(',').filter(Boolean).map(Number);
+    let free = QS.map((_, i) => i).filter(i => !used.includes(i)); if(!free.length) free = QS.map((_, i) => i);
+    const q = free[Math.floor(Math.random() * free.length)];
+    round = Object.assign(base, { game: 'joker', q });
+    up['meta/usedQ'] = (free.length === QS.length ? [] : used).concat(q).join(',');
+    up['meta/nextJoker'] = gapFix(n + rint(17, 23), M.nextWelle || 0);
+  } else {
+    const keys = Object.keys(GAMES).filter(k => !GAMES[k].special);
+    const recent = (M.recent || '').split(',').filter(Boolean);
+    let choices = keys.filter(k => !recent.includes(k)); if(!choices.length) choices = keys;
+    const g = choices[Math.floor(Math.random() * choices.length)];
+    up['meta/recent'] = recent.concat(g).slice(-6).join(',');
+    round = Object.assign(base, { game: g });
+    if(g === 'rad') round.spinner = pick();
+    if(n >= (M.nextDouble || 1e9)){ round.double = true; up['meta/nextDouble'] = n + rint(6, 10); }
+  }
+  up.round = round; up.answers = null; up.live = null;
+  await roomRef.update(up);
+}
+async function evaluate(){
+  const r = room.round, g = GAMES[r.game], P = room.players || {};
+  const ans = (room.answers && room.answers['r' + r.n]) || {};
+  const rows = Object.keys(r.parts || {}).map(id => {
+    const a = ans[id];
+    return a ? Object.assign({ id }, a, { fail: !!a.fail }) : { id, fail: true, why: 'keine Reaktion' };
+  });
+  const res = g.eval ? g.eval(rows, r) : defaultEval(rows, g);
+  const up0 = {};
+  const base = res.base || {}; (res.losers || []).forEach(id => base[id] = (base[id] || 0) + 1);
+  const mult = (r.double && !res.noDouble) ? 2 : 1;
+  Object.keys(base).forEach(id => base[id] *= mult);
+  if(res.gives) res.gives *= mult;
+  if(res.givesList){ res.givesList.forEach(x => x.n *= mult); const top = res.givesList.length ? Math.max(...res.givesList.map(x => x.n)) : 0; res.givesList.filter(x => x.n === top).forEach(x => { if(P[x.id]) up0['players/' + x.id + '/wins'] = (P[x.id].wins || 0) + 1; }); }
+  const total = Object.assign({}, base), via = {};
+  Object.keys(base).forEach(id => partnersOf(id, r.n).forEach(o => {
+    if(!(o in base) && P[o] && (total[o] || 0) < base[id]){ total[o] = base[id]; via[o] = id; }
+  }));
+  const blocked = Object.keys(total).filter(id => P[id] && P[id].shieldOn);
+  const up = up0;
+  Object.keys(total).forEach(id => {
+    if(!P[id]) return;
+    if(blocked.includes(id)){ up['players/' + id + '/shieldOn'] = false; return; }
+    up['players/' + id + '/drinks'] = (P[id].drinks || 0) + total[id];
+    if(id in base) up['players/' + id + '/losses'] = (P[id].losses || 0) + 1;
+  });
+  if(res.winner && P[res.winner]){
+    up['players/' + res.winner + '/wins'] = (P[res.winner].wins || 0) + 1;
+    if(r.game === 'gruen'){ const v = res.rows[0].v, best = P[res.winner].best; if(best == null || v < best) up['players/' + res.winner + '/best'] = v; }
+  }
+  if(res.shieldTo){
+    res.shieldGot = []; res.shieldLost = [];
+    res.shieldTo.forEach(id => {
+      if(!P[id]) return;
+      if((P[id].shields || 0) >= MAX_SHIELDS) res.shieldLost.push(id);
+      else { res.shieldGot.push(id); up['players/' + id + '/shields'] = (P[id].shields || 0) + 1; up['players/' + id + '/shieldsWon'] = (P[id].shieldsWon || 0) + 1; }
+    });
+  }
+  if(res.links && res.links.length){
+    res.links.forEach((a, k) => { up['meta/links/r' + r.n + '_' + k] = { a, from: r.n, until: r.n + 3 }; });
+    up['meta/linkLog/r' + r.n] = res.links;
+  }
+  Object.assign(res, { base, total, via, blocked, mult });
+  up['round/phase'] = 'result';
+  up['round/resultAt'] = now();
+  up['round/result'] = clean(res);
+  await roomRef.update(up);
+}
+function mergeGroups(i, j){
+  const r = room.round, res = r.result, n = r.n;
+  const gs = (res.groups || []).map(g => ({ ids: g.ids.slice(), text: g.text }));
+  if(!gs[i] || !gs[j] || i === j) return;
+  gs[i].ids = gs[i].ids.concat(gs[j].ids); gs[i].text = gs[i].text + ' / ' + gs[j].text; gs.splice(j, 1);
+  gs.sort((a, b) => b.ids.length - a.ids.length);
+  const links = Object.assign({}, room.meta.links || {});
+  Object.keys(links).forEach(k => { if(k.startsWith('r' + n + '_')) delete links[k]; });
+  const pairs = gs.filter(g => g.ids.length > 1).map(g => g.ids);
+  pairs.forEach((a, k) => { links['r' + n + '_' + k] = { a, from: n, until: n + 3 }; });
+  roomRef.update({ 'round/result/groups': gs, 'meta/links': links, ['meta/linkLog/r' + n]: pairs.length ? pairs : null });
+}
+function endGame(){ if(confirm('Spiel wirklich beenden und zur Siegerehrung?')) roomRef.child('meta').update({ status: 'ended' }); }
+function newGame(){
+  const up = { 'meta/status': 'lobby', 'meta/recent': null, 'meta/links': null, 'meta/linkLog': null, 'meta/rule': null, 'meta/usedQ': null,
+    'meta/nextDouble': null, 'meta/nextWelle': null, 'meta/nextJoker': null, round: null, answers: null, live: null };
+  Object.keys(room.players || {}).forEach(id => {
+    ['drinks', 'losses', 'wins', 'shields', 'shieldsWon'].forEach(k => up['players/' + id + '/' + k] = 0);
+    up['players/' + id + '/best'] = null; up['players/' + id + '/shieldOn'] = false;
+  });
+  roomRef.update(up);
+}
+
+/* ===================== Spielbildschirm ===================== */
+function renderGame(){
+  show('game');
+  const r = room.round, me = (room.players || {})[pid] || {};
+  const sh = me.shieldOn ? '<button class="icon on" onclick="activateShield()" aria-label="Schild aktiv">🛡️ aktiv</button>'
+    : `<button class="icon ${me.shields ? '' : 'dim'}" onclick="activateShield()" aria-label="Schutzschild">🛡️ ${me.shields || 0}/${MAX_SHIELDS}</button>`;
+  $('#topbar').innerHTML =
+    `<div class="rnd">${r ? 'Runde ' + r.n : 'Los geht’s'}</div>${sh}
+     <button class="icon" onclick="toggleBoard(true)" aria-label="Rangliste">🏆</button>` +
+    (isHost ? `<button class="icon" onclick="endGame()" aria-label="Spiel beenden">Ende</button>` : '');
+  let st = '';
+  if(r){
+    const ps = partnersOf(pid, r.phase === 'result' ? r.n + 1 : r.n);
+    if(ps.length) st += `<span>🔗 Partner: ${ps.map(nm).join(', ')}</span>`;
+    const rule = room.meta.rule;
+    if(rule && rule.text && r.n <= rule.until) st += `<span class="rule">👑 Regel: ${esc(rule.text)} (bis Runde ${rule.until})</span>`;
+  }
+  $('#status').innerHTML = st; $('#status').style.display = st ? 'flex' : 'none';
+  renderBoard();
+  let key = r ? r.n + '-' + r.phase : 'wait';
+  if(r && r.game === 'welle') key += r.category ? '-c' : '';
+  if(r && r.game === 'welle' && r.phase === 'result') key += '-' + JSON.stringify((r.result && r.result.groups) || []).length;
+  if(key !== viewKey){
+    viewKey = key; clearTimers();
+    const stage = $('#stage');
+    if(!r) stage.innerHTML = '<div class="intro"><div class="gname">Gleich geht’s los …</div></div>';
+    else if(r.phase === 'play') playRound(r);
+    else showResult(r);
+  }
+  updateLive();
+}
+
+function myAnswer(r){ return room.answers && room.answers['r' + r.n] && room.answers['r' + r.n][pid]; }
+function waitHTML(msg){ return `<div class="wait">${msg ? '<p>' + msg + '</p>' : ''}<p class="wc">Warte auf die anderen … <b id="wc"></b></p></div>`; }
+function feedbackHTML(game, res){
+  const g = GAMES[game];
+  if(g.fb) return g.fb(res);
+  return res.fail ? `<div class="fb bad">😬 ${esc(res.why)}</div>` : `<div class="fb good">${valText(game, res)}</div>`;
+}
+
+function playRound(r){
+  const g = GAMES[r.game], stage = $('#stage');
+  if(!r.parts || !r.parts[pid]){ stage.innerHTML = waitHTML('Du steigst nächste Runde ein 🍻'); return; }
+  const prev = myAnswer(r);
+  if(!g.custom && prev){ stage.innerHTML = feedbackHTML(r.game, prev) + waitHTML(''); return; }
+  let sent = false;
+  const done = res => {
+    if(sent) return; sent = true; clearTimers();
+    roomRef.child('answers/r' + r.n + '/' + pid).set(clean(res));
+    if(r.game === 'tauziehen') roomRef.child('live/r' + r.n + '/' + pid).set(res.taps || 0);
+    T(() => { stage.innerHTML = feedbackHTML(r.game, res) + waitHTML(''); updateLive(); }, 450);
+  };
+  let who = '';
+  if(r.game === 'rad') who = `<p class="rule"><b>${nm(r.spinner)}</b> dreht diesmal.</p>`;
+  if(r.game === 'welle') who = `<p class="rule"><b>${nm(r.setter)}</b> nennt die Kategorie.</p>`;
+  stage.innerHTML = `<div class="intro">${r.double ? '<div class="dbl">⚡ DOPPELRUNDE ⚡</div>' : ''}<div class="gname">${g.title}</div><p class="rule">${g.rule}</p>${who}<div class="count" id="cd"></div></div>`;
+  const tick = () => {
+    const left = r.startAt - now();
+    if(left <= 0){
+      clearTimers();
+      if(!g.custom && now() > r.startAt + g.max){ done({ fail: true, why: 'zu spät' }); return; }
+      stage.innerHTML = '';
+      if(g.custom) g.run(stage, rng(r.seed), r);
+      else g.run(stage, rng(r.seed), done, r);
+    } else {
+      const el = $('#cd'); if(el) el.textContent = Math.ceil(left / 1000);
+    }
+  };
+  timers.push(setInterval(tick, 80)); tick();
+}
+
+function drinkLines(res){
+  const total = res.total || {}, blocked = res.blocked || [], via = res.via || {}, base = res.base || {};
+  const byAmt = {};
+  Object.keys(base).filter(id => !blocked.includes(id)).forEach(id => { (byAmt[base[id]] = byAmt[base[id]] || []).push(id); });
+  const lines = Object.keys(byAmt).sort((a, b) => b - a).map(a => `💥 ${joinNames(byAmt[a])} ${byAmt[a].length > 1 ? 'trinken' : 'trinkt'} ${a}!`);
+  const extra = [];
+  Object.keys(via).filter(id => !blocked.includes(id)).forEach(id => extra.push(`🔗 ${nm(id)} trinkt ${total[id]} mit (Partner von ${nm(via[id])})`));
+  blocked.forEach(id => extra.push(`🛡️ ${nm(id)} wehrt mit dem Schild ab!`));
+  return { lines, extra };
+}
+
+function showResult(r){
+  const res = r.result || {}, g = GAMES[r.game], L = Object.keys(res.base || {});
+  const { lines, extra } = drinkLines(res);
+  const stage = $('#stage');
+  const title = `<div class="gsmall">${g.title}${res.mult > 1 ? ' · ⚡ Doppelrunde' : ''}</div>`;
+  const shieldLines = [];
+  (res.shieldGot || []).forEach(id => shieldLines.push(`🛡️ ${nm(id)} bekommt ein Schutzschild!`));
+  (res.shieldLost || []).forEach(id => shieldLines.push(`🛡️ ${nm(id)} hat schon 2 Schilde – Schild verfällt!`));
+  let html = '';
+
+  if(r.game === 'welle'){
+    const groups = res.groups || [];
+    const pairs = groups.filter(x => x.ids.length > 1);
+    const head = pairs.length ? '🔗 Neue Partner!' : '🔗 Keine gleichen Antworten';
+    const canMerge = pid === r.setter;
+    html = `<div class="result">${title}<div class="gsmall">Kategorie: ${esc(r.category || '–')}</div><div class="boom">${head}</div><div class="lines">${pairs.map(x => `<div>🔗 ${joinNames(x.ids)} sind 3 Runden Partner</div>`).join('')}${lines.map(l => `<div>${l} (nichts geschrieben)</div>`).join('')}${extra.map(l => `<div>${l}</div>`).join('')}</div>
+      ${canMerge && groups.length > 1 ? '<p class="note">Du hast die Kategorie gestellt: Tipp zwei Antworten an, die dasselbe meinen, um sie zusammenzuschieben.</p>' : ''}
+      <ul class="groups">${groups.map((x, i) => `<li class="${x.ids.length > 1 ? 'pair' : ''}" data-i="${i}"><b>${esc(x.text)}</b><small>${joinNames(x.ids)}</small></li>`).join('')}</ul><div class="next" id="nx"></div></div>`;
+    stage.innerHTML = html;
+    if(canMerge){
+      let sel = null;
+      stage.querySelectorAll('.groups li').forEach(li => li.onclick = () => {
+        const i = +li.dataset.i;
+        if(sel === null){ sel = i; li.classList.add('sel'); return; }
+        if(sel === i){ sel = null; li.classList.remove('sel'); return; }
+        mergeGroups(Math.min(sel, i), Math.max(sel, i));
+      });
+    }
+    return;
+  }
+
+  if(r.game === 'joker'){
+    const rows = (res.rows || []).map(x => `<li class="${(res.shieldTo || []).includes(x.id) ? '' : ''}"><span>${nm(x.id)}</span><span>${x.fail || typeof x.num !== 'number' ? 'keine Schätzung' : num(x.num)}</span></li>`).join('');
+    const head = shieldLines.length ? shieldLines[0] : '🃏 Keiner hat geschätzt';
+    html = `<div class="result">${title}<div class="boom">${head}</div><div class="lines">${shieldLines.slice(1).map(l => `<div>${l}</div>`).join('')}</div><div class="note">Richtige Antwort: ${num(res.answer)}${res.unit ? ' ' + esc(res.unit) : ''}</div><ol class="rows">${rows}</ol><div class="next" id="nx"></div></div>`;
+    stage.innerHTML = html;
+    return;
+  }
+
+  if(r.game === 'pferd'){
+    const order = res.order || [0, 1, 2, 3], pay = [3, 2, 1, 0], R3 = rng(r.seed + 77), Tm = {};
+    order.forEach((h, place) => { Tm[h] = 9 + place * 0.45 + R3() * 0.2; });
+    const wig = HORSES.map(() => ({ a: 0.05 + R3() * 0.05, f: 0.25 + R3() * 0.4, p: R3() * 6 }));
+    const medals = ['🥇', '🥈', '🥉', '4.'];
+    const pl = order.map((h, place) => {
+      const bet = (res.rows || []).filter(x => x.pick === h).map(x => x.id);
+      const amt = pay[place] * (res.mult || 1);
+      return `<div>${medals[place]} ${HORSES[h].n}${bet.length ? ' – ' + joinNames(bet) + (amt ? (bet.length > 1 ? ' verteilen je ' : ' verteilt ') + amt : (bet.length > 1 ? ' gehen' : ' geht') + ' leer aus') : ''}</div>`;
+    }).join('');
+    stage.innerHTML = `<div class="result">${title}<div class="boom" id="pfHead">🏇 Das Rennen läuft!</div><div class="race">${HORSES.map((h, i) => `<div class="lane" style="border-left-color:${h.c}"><span class="horse" id="hz${i}">🏇</span></div>`).join('')}</div><div class="lines" id="pfLines" style="visibility:hidden">${pl}${extra.map(l => `<div>${l}</div>`).join('')}</div><div class="next" id="nx"></div></div>`;
+    const start = (r.resultAt || now()) + 800, maxT = Math.max(...Object.values(Tm));
+    loop(() => {
+      const tt = (now() - start) / 1000;
+      HORSES.forEach((_, h) => {
+        const el = $('#hz' + h); if(!el) return;
+        const b = Math.max(0, tt / Tm[h]), w = wig[h];
+        const p = Math.max(0, Math.min(1, b + w.a * Math.sin(2 * Math.PI * w.f * tt + w.p) * Math.max(0, Math.min(b, 1 - b)) * 4));
+        el.style.transform = `translateX(${p * (el.parentNode.clientWidth - 46)}px) scaleX(-1)`;
+      });
+      if(tt > maxT + 0.4){
+        $('#pfHead').innerHTML = `🏆 ${HORSES[order[0]].n} gewinnt!`; $('#pfLines').style.visibility = 'visible'; pferdDone = r.n; updateLive(); return false;
+      }
+    });
+    return;
+  }
+
+  if(r.game === 'schiffe'){
+    const head = res.loseSide ? `🍺 ${res.loseSide === 'A' ? 'Team Rot' : 'Team Blau'} muss das Glas exen!` : '⚓ Schiffe versenken vorbei';
+    stage.innerHTML = `<div class="result">${title}<div class="boom">${head}</div>${res.ex && res.ex.length ? `<div class="sub">${joinNames(res.ex)}: Ex! 🍺</div>` : ''}<div class="lines">${lines.map(l => `<div>${l} (getroffen)</div>`).join('')}${extra.map(l => `<div>${l}</div>`).join('')}</div>${res.note ? `<div class="note">${esc(res.note)}</div>` : ''}<div class="next" id="nx"></div></div>`;
+    return;
+  }
+
+  if(r.game === 'rad'){
+    const o = RAD.find(x => x.k === res.kind) || RAD[8];
+    let body = '';
+    if(res.kind === 'opfer'){
+      body = `<div class="roul" id="roul"></div><div class="lines" id="radLines" style="visibility:hidden">${extra.map(l => `<div>${l}</div>`).join('')}</div>`;
+    } else {
+      const all = lines.concat(extra);
+      if(res.winner) all.unshift(`🎯 ${nm(res.winner)} verteilt ${res.gives} Schlücke`);
+      if(res.links) res.links.forEach(a => all.push(`🔗 ${joinNames(a)} sind 3 Runden Partner`));
+      shieldLines.forEach(l => all.push(l));
+      if(res.kind === 'niete') all.push('Nichts passiert. Glück gehabt … oder Pech? 😄');
+      body = `<div class="lines">${all.map(l => `<div>${l}</div>`).join('')}</div><div id="ruleBox"></div>`;
+    }
+    html = `<div class="result">${title}<div class="boom">${o.e} ${o.t}!</div><div class="note">${esc(res.note || '')}</div>${body}<div class="next" id="nx"></div></div>`;
+    stage.innerHTML = html;
+    if(res.kind === 'opfer'){
+      const names = Object.keys(r.parts || {}).map(nameOf), el = $('#roul');
+      let i = 0, delay = 60;
+      const step = () => {
+        el.textContent = names[i++ % names.length];
+        delay *= 1.12;
+        if(delay < 420) T(step, delay);
+        else { el.innerHTML = lines.length ? lines[0] : '🛡️ abgewehrt!'; el.style.color = 'var(--beer)'; el.style.animation = 'pop .45s ease-out'; $('#radLines').style.visibility = 'visible'; }
+      };
+      step();
+    }
+    if(res.kind === 'regel') renderRuleBox(r);
+    return;
+  }
+
+  const head = lines.length ? lines[0] : (extra.length ? '🛡️ Abgewehrt!' : '🍀 Diesmal trinkt keiner');
+  const more = lines.slice(1).concat(extra);
+  let sub = '';
+  if(res.winner) sub = res.gives ? `🎯 ${nm(res.winner)} verteilt ${res.gives} Schlücke` : `⚡ Am besten: ${nm(res.winner)}`;
+  const rows = (res.rows || []).map(x =>
+    `<li class="${x.fail ? 'f' : ''} ${L.includes(x.id) ? 'l' : ''}"><span>${nm(x.id)}</span><span>${x.fail ? esc(x.why || '–') : esc(valText(r.game, x))}</span></li>`).join('');
+  stage.innerHTML = `<div class="result">${title}<div class="boom">${head}</div>${more.length ? `<div class="lines">${more.map(l => `<div>${l}</div>`).join('')}</div>` : ''}${sub ? `<div class="sub">${sub}</div>` : ''}${res.note ? `<div class="note">${esc(res.note)}</div>` : ''}<ol class="rows">${rows}</ol><div class="next" id="nx"></div></div>`;
+}
+function renderRuleBox(r){
+  const box = $('#ruleBox'); if(!box) return;
+  const rule = room.meta.rule, set = rule && rule.from === r.n;
+  if(set){ box.innerHTML = `<div class="qbox">👑 Neue Regel bis Runde ${rule.until}:<br>${esc(rule.text)}</div>`; return; }
+  if(pid === r.spinner){
+    if($('#ruleIn')) return;
+    box.innerHTML = `<p class="rule">Stell eine Regel für die nächsten 5 Runden auf:</p><input id="ruleIn" maxlength="80" placeholder="z. B. Wer flucht, trinkt" autocomplete="off"><button class="btn" id="ruleBtn">Regel festlegen</button>`;
+    $('#ruleBtn').onclick = () => { const t = $('#ruleIn').value.trim(); if(!t){ $('#ruleIn').focus(); return; } roomRef.child('meta/rule').set({ text: t, by: pid, from: r.n, until: r.n + 5 }); };
+  } else box.innerHTML = `<p class="rule">${nm(r.spinner)} denkt sich eine Regel aus …</p>`;
+}
+
+function updateLive(){
+  const r = room && room.round; if(!r) return;
+  const parts = Object.keys(r.parts || {});
+  const ans = (room.answers && room.answers['r' + r.n]) || {};
+  const wc = $('#wc');
+  if(wc) wc.textContent = parts.filter(p => ans[p]).length + '/' + parts.length;
+  const miss = $('#miss');
+  if(miss){ const m = parts.filter(p => !ans[p]); miss.textContent = m.length ? 'Fehlt noch: ' + m.map(nameOf).join(', ') : ''; }
+  const knot = $('#knot');
+  if(knot && r.game === 'tauziehen'){
+    const live = (room.live && room.live['r' + r.n]) || {};
+    const { A, B } = teamsOf(r);
+    const s = ids => ids.reduce((t, id) => t + (live[id] || 0), 0);
+    const a = s(A), b = s(B);
+    knot.style.left = (50 - ((a - b) / (a + b + 4)) * 45) + '%';
+  }
+  if(liveHook) liveHook();
+  if(r.phase === 'result'){
+    if(r.game === 'rad' && r.result && r.result.kind === 'regel') renderRuleBox(r);
+    const nx = $('#nx');
+    if(nx && r.game === 'pferd' && pferdDone !== r.n){ nx.textContent = ''; }
+    else if(nx){
+      if(isHost){ if(!$('#nextBtn')) nx.innerHTML = '<button class="btn" id="nextBtn" onclick="nextRound()">Weiter ▶</button>'; }
+      else nx.textContent = 'Trinken! 🍻 Der Host macht gleich weiter …';
+    }
+  }
+}
+
+function sortedPlayers(){ return Object.entries(room.players || {}).sort((a, b) => (b[1].drinks || 0) - (a[1].drinks || 0)); }
+function renderBoard(){
+  $('#boardList').innerHTML = sortedPlayers().map(([id, p], i) =>
+    `<li><span class="pos">${i + 1}</span><span class="nm">${esc(p.name)}${id === pid ? ' (du)' : ''}</span><span>${p.shields ? '🛡️' + p.shields + ' ' : ''}🍺 ${p.drinks || 0}</span></li>`).join('');
+}
+function toggleBoard(open){ $('#board').classList.toggle('open', open); }
+
+/* ===================== Ende ===================== */
+function renderEnd(){
+  viewKey = ''; clearTimers(); toggleBoard(false); show('end');
+  const list = sortedPlayers();
+  const ent = Object.entries(room.players || {});
+  const top = (f, key) => ent.filter(([, p]) => f(p)).sort((a, b) => key(b[1]) - key(a[1]))[0];
+  const thirsty = top(p => (p.drinks || 0) > 0, p => p.drinks);
+  const fastest = ent.filter(([, p]) => p.best != null).sort((a, b) => a[1].best - b[1].best)[0];
+  const winner = top(p => (p.wins || 0) > 0, p => p.wins);
+  const unlucky = top(p => (p.losses || 0) > 0, p => p.losses);
+  const joker = top(p => (p.shieldsWon || 0) > 0, p => p.shieldsWon);
+  const pairCount = {};
+  Object.values((room.meta && room.meta.linkLog) || {}).forEach(groups => (groups || []).forEach(g => {
+    for(let i = 0; i < g.length; i++) for(let j = i + 1; j < g.length; j++){ const k = [g[i], g[j]].sort().join('|'); pairCount[k] = (pairCount[k] || 0) + 1; }
+  }));
+  const soul = Object.entries(pairCount).sort((a, b) => b[1] - a[1])[0];
+  const card = (t, w) => `<div class="title-card"><div class="t">${t}</div><div class="w">${w}</div></div>`;
+  $('#end').innerHTML = `
+    <h1 class="logo" style="margin-top:4vh;font-size:clamp(2.4rem,12vw,3.6rem)"><span>Siegerehrung</span></h1>
+    <div class="titles">
+      ${fastest ? card('⚡ Schnellster Finger', esc(fastest[1].name) + ' · ' + fastest[1].best + ' ms') : ''}
+      ${winner ? card('🏅 Die meisten Siege', esc(winner[1].name) + ' · ' + winner[1].wins) : ''}
+      ${thirsty ? card('🍺 Durstigster Spieler', esc(thirsty[1].name) + ' · ' + thirsty[1].drinks + ' Schlücke') : ''}
+      ${unlucky ? card('🍀 Pechvogel', esc(unlucky[1].name) + ' · ' + unlucky[1].losses + ' verlorene Runden') : ''}
+      ${joker ? card('🛡️ Joker-König', esc(joker[1].name) + ' · ' + joker[1].shieldsWon + (joker[1].shieldsWon === 1 ? ' Schild' : ' Schilde')) : ''}
+      ${soul ? card('🔗 Seelenverwandte', soul[0].split('|').map(nm).join(' & ') + ' · ' + soul[1] + '× Partner') : ''}
+    </div>
+    <h2>Endstand</h2>
+    <ol class="rank">${list.map(([id, p], i) => `<li><span class="pos">${i + 1}</span><span class="nm">${esc(p.name)}</span><span>🍺 ${p.drinks || 0}</span></li>`).join('')}</ol>
+    <div class="spacer"></div>
+    ${isHost ? '<button class="btn" onclick="newGame()">Neues Spiel</button>' : '<p class="muted" style="text-align:center;margin-top:20px">Der Host kann ein neues Spiel starten.</p>'}
+    <button class="btn ghost" onclick="leaveRoom()">Raum verlassen</button>`;
+}
+
+
+/* ===================== Etappe 4: neue Spiele ===================== */
+const HORSES = [{ n: 'Rot', c: '#FF4D5E' }, { n: 'Blau', c: '#3B82F6' }, { n: 'Gelb', c: '#FFB627' }, { n: 'Grün', c: '#22D37A' }];
+const ITEMS = '📱 Handy|📕 Buch|🔑 Schlüssel|⌚ Armbanduhr|⏰ Wecker|👓 Brille|🕶️ Sonnenbrille|☂️ Regenschirm|🕯️ Kerze|🔨 Hammer|🎸 Gitarre|🎺 Trompete|⚽ Fußball|🏀 Basketball|🍕 Pizza|🍌 Banane|🍎 Apfel|🍅 Tomate|🍓 Erdbeere|🍍 Ananas|🥨 Brezel|🍔 Burger|🍦 Eis|🍺 Bier|☕ Kaffee|💡 Glühbirne|✂️ Schere|📷 Kamera|👑 Krone|🚀 Rakete|🚲 Fahrrad|🚗 Auto|🎈 Luftballon|🎁 Geschenk|🎲 Würfel|🎧 Kopfhörer|💻 Laptop|👟 Turnschuh|🎩 Zylinder|🔦 Taschenlampe|🔔 Glocke|⚓ Anker|🧲 Magnet|🔍 Lupe|🔋 Batterie|✏️ Bleistift|🖌️ Pinsel|✉️ Briefumschlag|🔒 Schloss|🥕 Karotte'
+  .split('|').map(s => { const i = s.indexOf(' '); return { e: s.slice(0, i), n: s.slice(i + 1) }; });
+function retteItems(seed){ return shuffle(ITEMS.map((_, i) => i), rng(seed + 1)).slice(0, 25); }
+function retteTarget(seed, step, pool){
+  let k = Math.floor(rng(seed + step * 7 + 3)() * 25);
+  if(step > 0){ const prev = Math.floor(rng(seed + (step - 1) * 7 + 3)() * 25); if(prev === k) k = (k + 1) % 25; }
+  return pool[k];
+}
+function shipShooter(R){
+  const t = teamsOf(R), order = R.first === 'A' ? ['A', 'B'] : ['B', 'A'];
+  const side = order[(R.turn || 0) % 2], list = t[side];
+  return { id: list[Math.floor((R.turn || 0) / 2) % list.length], side, target: side === 'A' ? 'B' : 'A' };
+}
+function shipShots(R){ return Object.keys(R.shots || {}).sort((a, b) => +a.slice(1) - +b.slice(1)).map(k => R.shots[k]); }
+function curlOrder(R){
+  const { A, B } = teamsOf(R), out = [];
+  for(let i = 0; i < Math.max(A.length, B.length); i++){ if(A[i]) out.push({ id: A[i], side: 'A' }); if(B[i]) out.push({ id: B[i], side: 'B' }); }
+  return out;
+}
+const CW = 300, CH = 620, SX = 150, SY = 572, HX = 150, HY = 135, GR = 13, HOUSE = 70;
+function curlStep(gl){
+  let moving = false;
+  for(const g of gl){
+    if(g.off) continue;
+    g.x += g.vx; g.y += g.vy; g.vx *= 0.985; g.vy *= 0.985;
+    if(g.vx * g.vx + g.vy * g.vy < 0.0025){ g.vx = 0; g.vy = 0; } else moving = true;
+    if(g.x < GR){ g.x = GR; g.vx = -g.vx * 0.6; }
+    if(g.x > CW - GR){ g.x = CW - GR; g.vx = -g.vx * 0.6; }
+    if(g.y < -GR || g.y > CH + GR){ g.off = true; g.vx = 0; g.vy = 0; }
+  }
+  for(let i = 0; i < gl.length; i++) for(let j = i + 1; j < gl.length; j++){
+    const a = gl[i], b = gl[j]; if(a.off || b.off) continue;
+    const dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
+    if(d2 > 0 && d2 < 4 * GR * GR){
+      const d = Math.sqrt(d2), nx = dx / d, ny = dy / d;
+      const rv = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+      if(rv < 0){ const jj = -(1.9) * rv / 2; a.vx -= jj * nx; a.vy -= jj * ny; b.vx += jj * nx; b.vy += jj * ny; moving = true; }
+      const ov = (2 * GR - d) / 2; a.x -= nx * ov; a.y -= ny * ov; b.x += nx * ov; b.y += ny * ov;
+    }
+  }
+  return moving;
+}
+function curlSim(shots, upto, record){
+  const gl = []; let frames = null;
+  for(let k = 0; k < upto; k++){
+    const s = shots[k];
+    gl.push({ x: SX, y: SY, vx: s.vx, vy: s.vy, side: s.side, id: s.id, off: false });
+    const rec = (record && k === upto - 1) ? [gl.map(g => [g.x, g.y, g.off])] : null;
+    for(let f = 0; f < 1500; f++){ const m = curlStep(gl); if(rec) rec.push(gl.map(g => [g.x, g.y, g.off])); if(!m) break; }
+    if(rec) frames = rec;
+  }
+  return { gl, frames };
+}
+function curlShots(R){ return Object.keys(R.shots || {}).sort((a, b) => +a.slice(1) - +b.slice(1)).map(k => R.shots[k]); }
+function curlScore(gl){
+  const inH = gl.filter(g => !g.off).map(g => ({ ...g, d: Math.hypot(g.x - HX, g.y - HY) })).filter(g => g.d <= HOUSE + GR).sort((a, b) => a.d - b.d);
+  if(!inH.length) return null;
+  const side = inH[0].side, opp = inH.find(g => g.side !== side);
+  const pts = inH.filter(g => g.side === side && (!opp || g.d < opp.d)).length;
+  return { side, pts };
+}
+
+Object.assign(GAMES, {
+  pferd: {
+    title: 'Pferderennen', rule: 'Setz auf ein Pferd! Platz 1 verteilt 3, Platz 2 verteilt 2, Platz 3 verteilt 1. Platz 4 geht leer aus.', max: 13000,
+    show: x => HORSES[x.pick] ? '🏇 ' + HORSES[x.pick].n : '–',
+    fb: res => `<div class="fb meh">🏇 ${HORSES[res.pick].n}<br>🤞</div>`,
+    run(el, r, done){
+      el.innerHTML = '<div class="btns4">' + HORSES.map((h, i) => `<button class="bigbtn" data-i="${i}" style="background:${h.c};font-size:3rem">🏇</button>`).join('') + '</div><p class="hint">Auf welches Pferd setzt du?</p>';
+      el.querySelectorAll('.bigbtn').forEach(b => b.addEventListener('pointerdown', e => {
+        e.preventDefault(); el.querySelectorAll('.bigbtn').forEach(x => x.classList.add(x === b ? 'picked' : 'dim'));
+        done({ pick: +b.dataset.i });
+      }));
+      T(() => done({ pick: Math.floor(Math.random() * 4), auto: true }), 10000);
+    },
+    eval(rows, r){
+      const order = shuffle([0, 1, 2, 3], rng(r.seed + 5)), pay = [3, 2, 1, 0];
+      const ok = rows.filter(x => !x.fail && x.pick != null);
+      ok.sort((a, b) => order.indexOf(a.pick) - order.indexOf(b.pick));
+      const givesList = ok.filter(x => pay[order.indexOf(x.pick)] > 0).map(x => ({ id: x.id, n: pay[order.indexOf(x.pick)] }));
+      return { kind: 'pferd', base: {}, order, givesList, rows: ok.concat(rows.filter(x => x.fail || x.pick == null)) };
+    }
+  },
+
+  einzig: {
+    title: 'Einzigartig', rule: 'Wähl heimlich eine Zahl von 1 bis 10. Wer die kleinste Zahl hat, die sonst keiner gewählt hat, verteilt 2. Wer eine Zahl mit jemandem teilt, trinkt!', max: 12500,
+    show: x => x.pick ? String(x.pick) : '–',
+    fb: res => res.fail ? `<div class="fb bad">😬 ${esc(res.why)}</div>` : `<div class="fb meh">Deine Zahl: ${res.pick}<br>🤫</div>`,
+    run(el, r, done){
+      el.innerHTML = '<div class="grid" style="grid-template-columns:repeat(5,1fr);width:min(92vw,400px)">' +
+        Array.from({ length: 10 }, (_, i) => `<button class="cell" data-n="${i + 1}" style="font-size:2rem">${i + 1}</button>`).join('') + '</div><p class="hint">Heimlich wählen!</p>';
+      el.querySelectorAll('.cell').forEach(b => b.addEventListener('pointerdown', e => { e.preventDefault(); b.classList.add('hit'); done({ pick: +b.dataset.n }); }));
+      T(() => done({ fail: true, why: 'nichts gewählt' }), 10000);
+    },
+    eval(rows){
+      const ok = rows.filter(x => !x.fail && x.pick), fails = rows.filter(x => x.fail || !x.pick);
+      const cnt = {}; ok.forEach(x => cnt[x.pick] = (cnt[x.pick] || 0) + 1);
+      const uniq = Object.keys(cnt).filter(k => cnt[k] === 1).map(Number).sort((a, b) => a - b);
+      ok.sort((a, b) => a.pick - b.pick);
+      if(!uniq.length) return { losers: ok.map(x => x.id).concat(fails.map(x => x.id)), rows: ok.concat(fails), note: 'Keine Zahl war einzigartig – alle trinken!' };
+      const w = ok.find(x => x.pick === uniq[0]);
+      const losers = ok.filter(x => cnt[x.pick] > 1).map(x => x.id).concat(fails.map(x => x.id));
+      return { losers, winner: w.id, gives: 2, rows: ok.concat(fails), note: 'Kleinste einzigartige Zahl: ' + uniq[0] };
+    }
+  },
+
+  rette: {
+    title: 'Rette sich, wer kann', rule: 'Tipp so schnell wie möglich auf den gesuchten Gegenstand. Wer zuerst richtig liegt, ist gerettet. Falscher Tipp heißt: diese Runde gesperrt! Der Letzte trinkt 2.', max: Infinity, custom: true,
+    run(el, rr, r){
+      const pool = retteItems(r.seed); let sig = '';
+      const build = R => {
+        const step = R.step || 0, rem = R.remaining || [], r2 = rng(r.seed + step * 31 + 9);
+        const layout = shuffle(pool.slice(), r2), target = retteTarget(r.seed, step, pool), inGame = rem.includes(pid);
+        el.innerHTML = `<div class="sp" style="max-width:460px"><div class="note" id="rtMsg">${esc(R.lastMsg || '')}</div>
+          <div class="task" id="rtTask" style="margin:8px 0 14px">${inGame ? 'Gleich geht’s los …' : 'Du bist gerettet 🎉 Schau zu!'}</div>
+          <div class="grid">${layout.map(k => `<button class="cell" data-k="${k}" style="font-family:inherit;font-size:clamp(1.4rem,8vw,2rem)"><span style="display:inline-block;transform:rotate(${Math.round((r2() - .5) * 40)}deg) scale(${(0.8 + r2() * 0.35).toFixed(2)})">${ITEMS[k].e}</span></button>`).join('')}</div>
+          <p class="note" id="rtStat"></p></div>`;
+        let locked = false, open = false;
+        const go = () => { open = true; $('#rtTask').innerHTML = inGame ? `Tipp auf: <b>${esc(ITEMS[target].n)}</b>` : `Gesucht: <b>${esc(ITEMS[target].n)}</b> · Du bist gerettet 🎉`; };
+        const wait = (R.stepAt || 0) - now(); if(wait > 0) T(go, wait); else go();
+        el.querySelectorAll('.cell').forEach(b => b.addEventListener('pointerdown', e => {
+          e.preventDefault(); if(!inGame || locked || !open) return;
+          locked = true; const ok = +b.dataset.k === target;
+          b.classList.add(ok ? 'hit' : 'miss');
+          roomRef.child(`answers/r${r.n}/s${step}/${pid}`).set({ ok, t: Math.round(now()) });
+          $('#rtTask').innerHTML = ok ? 'Richtig! Warte kurz …' : '❌ Falsch! Diese Runde gesperrt.';
+        }));
+      };
+      const draw = () => {
+        const R = room.round; if(!R || R.n !== r.n || R.phase !== 'play' || !R.remaining) return;
+        const s = (R.step || 0) + '|' + R.remaining.join(',');
+        if(s !== sig){ sig = s; build(R); }
+        const st = $('#rtStat'); if(st) st.textContent = 'Noch dabei: ' + R.remaining.map(nameOf).join(', ');
+      };
+      liveHook = draw; draw();
+    },
+    eval(rows, r){
+      const saved = r.saved || [], rem = r.remaining || [];
+      const rws = saved.map((id, i) => ({ id, v: i + 1 }));
+      const losers = saved.length && rem.length === 1 ? rem : [];
+      rem.forEach(id => rws.push({ id, fail: true, why: 'Letzter 😬' }));
+      const base = {}; losers.forEach(id => base[id] = 2);
+      return { base, rows: rws, winner: saved[0] || null, note: 'Reihenfolge der Rettung' };
+    },
+    show: x => x.v + '. gerettet'
+  },
+
+  schiffe: {
+    title: 'Schiffe versenken', rule: 'Zwei Teams! Jeder setzt sein Boot auf das 4×4-Feld seines Teams. Dann wird abwechselnd geschossen. Wessen Boot getroffen wird, trinkt 1. Wer zuerst alle Boote verliert, muss das Glas exen! 🍺', max: Infinity, custom: true,
+    run(el, rr, r){
+      let sig = '';
+      const T2 = teamsOf(r), mySide = T2.A.includes(pid) ? 'A' : 'B';
+      const col = s => s === 'A' ? 'var(--red)' : 'var(--blue)', tname = s => s === 'A' ? 'Team Rot' : 'Team Blau';
+      const grid = (side, R, clickable, showBoats) => {
+        const ships = R.ships || {}, shots = shipShots(R).filter(s => s.team === side);
+        return '<div class="grid" style="grid-template-columns:repeat(4,1fr);width:min(84vw,340px)">' + Array.from({ length: 16 }, (_, c) => {
+          const sh = shots.find(s => s.cell === c), owners = T2[side].filter(id => ships[id] === c);
+          let inner = '', bg = '';
+          if(sh){ inner = sh.hit && sh.hit.length ? '💥' : '💦'; bg = sh.hit && sh.hit.length ? 'background:#5A2030' : 'background:#16314F'; }
+          else if(showBoats && owners.length) inner = '⛵<small style="display:block;font:600 .7rem Rubik,sans-serif">' + esc(owners.map(nameOf).join(', ')) + '</small>';
+          return `<button class="cell" data-c="${c}" style="font-family:inherit;font-size:1.6rem;${bg}" ${clickable && !sh ? '' : 'disabled'}>${inner}</button>`;
+        }).join('') + '</div>';
+      };
+      const render = R => {
+        if(!T2.B.length){ el.innerHTML = '<div class="sp"><p class="rule">Zu wenige Spieler für zwei Teams …</p></div>'; return; }
+        const head = `<div class="team-lbl" style="color:${col(mySide)}">Du bist in ${tname(mySide)}</div><div class="team-mates">mit ${esc(T2[mySide].filter(i => i !== pid).map(nameOf).join(', ') || 'niemandem')}</div>`;
+        if(!R.sub){
+          const ships = R.ships || {}, placed = ships[pid] != null;
+          const n = Object.keys(r.parts || {}).filter(id => ships[id] != null).length, total = Object.keys(r.parts || {}).length;
+          el.innerHTML = `<div class="sp">${head}<p class="task">${placed ? 'Boot gesetzt ⛵ Warte auf die anderen …' : 'Tipp ein Feld an, um dein Boot zu setzen!'}</p>${grid(mySide, R, !placed, true)}<p class="note">Gesetzt: ${n}/${total}</p>${isHost ? '<button class="btn ghost small" onclick="shipsGo()">Weiter</button>' : ''}</div>`;
+          if(!placed) el.querySelectorAll('.cell:not([disabled])').forEach(b => b.addEventListener('click', () => {
+            const c = +b.dataset.c, taken = T2[mySide].some(id => (room.round.ships || {})[id] === c);
+            if(taken) return; roomRef.child('round/ships/' + pid).set(c);
+          }));
+          return;
+        }
+        const sh = shipShooter(R), myTurn = sh.id === pid, viewSide = mySide === sh.target ? mySide : sh.target;
+        el.innerHTML = `<div class="sp">${head}<div class="note">${esc(R.lastMsg || '')}</div>
+          <p class="task">${myTurn ? '🎯 Du bist dran! Tipp ein Feld an.' : `🎯 ${nm(sh.id)} schießt <span class="muted" id="shT"></span>`}</p>
+          <div class="gsmall">${viewSide === mySide ? 'Euer Feld – hier schießt der Gegner hin' : 'Feld von ' + tname(sh.target)}</div>
+          ${grid(viewSide, R, myTurn && !R.over, viewSide === mySide)}<p class="note" id="shT2"></p></div>`;
+        if(myTurn) el.querySelectorAll('.cell:not([disabled])').forEach(b => b.addEventListener('click', () => {
+          roomRef.child('round/pending').set({ cell: +b.dataset.c, by: pid });
+          el.querySelectorAll('.cell').forEach(x => x.disabled = true);
+        }));
+      };
+      const tick = () => {
+        const R = room.round; if(!R || !R.sub || R.over) return;
+        const left = Math.max(0, Math.ceil(10 - (now() - (R.turnAt || 0)) / 1000));
+        const a = $('#shT'), b = $('#shT2'); if(a) a.textContent = '(' + left + ' s)'; if(b) b.textContent = '⏱ ' + left + ' s';
+      };
+      const draw = () => {
+        const R = room.round; if(!R || R.n !== r.n || R.phase !== 'play') return;
+        const s = JSON.stringify([R.sub, R.ships, R.shots, R.turn, R.over]);
+        if(s !== sig){ sig = s; render(R); }
+        tick();
+      };
+      liveHook = draw; draw(); timers.push(setInterval(tick, 300));
+    },
+    eval(rows, r){
+      const base = {}, shots = shipShots(r);
+      shots.forEach(s => (s.hit || []).forEach(id => base[id] = (base[id] || 0) + 1));
+      const T2 = teamsOf(r);
+      const loseSide = r.over || null;
+      return { kind: 'schiffe', base, ex: loseSide ? T2[loseSide] : [], loseSide, rows: [], noDouble: true,
+        note: loseSide ? (loseSide === 'A' ? 'Team Rot' : 'Team Blau') + ' hat alle Boote verloren' : '' };
+    }
+  },
+
+  curling: {
+    title: 'Kneipen-Curling', rule: 'Zwei Teams! Jeder schiebt abwechselnd ein Glas mit einem Wisch nach oben Richtung Zielkreis. Gläser stoßen sich an. Das Team mit dem Glas am nächsten an der Mitte holt Punkte – pro Punkt trinkt das Verliererteam einen!', max: Infinity, custom: true,
+    run(el, rr, r){
+      const order = curlOrder(r);
+      el.innerHTML = '<div class="note" id="cuMsg" style="position:absolute;top:6px;left:0;right:0;z-index:2;font-size:1.05rem;color:var(--foam)"></div><canvas class="cv" id="cu"></canvas>';
+      const cv = $('#cu'); const fit = fitCanvas(cv, CW, CH); const { ctx, s } = fit;
+      let cacheN = -1, cache = null, track = [], dragging = false;
+      const draw = () => {
+        const R = room.round; if(!R || R.n !== r.n) return false;
+        const shots = curlShots(R), n = shots.length;
+        if(n !== cacheN){ cacheN = n; cache = n ? curlSim(shots, n, true) : { gl: [], frames: null }; }
+        let pos = cache.gl.map(g => [g.x, g.y, g.off]);
+        if(n && cache.frames){ const f = Math.floor((now() - shots[n - 1].at) / 16); pos = cache.frames[Math.max(0, Math.min(cache.frames.length - 1, f))]; }
+        ctx.fillStyle = '#5A3A1C'; ctx.fillRect(0, 0, CW, CH);
+        ctx.strokeStyle = '#4A2F16'; ctx.lineWidth = 2; for(let i = 1; i < 10; i++){ ctx.beginPath(); ctx.moveTo(i * 30, 0); ctx.lineTo(i * 30, CH); ctx.stroke(); }
+        [[HOUSE, '#3B82F6'], [48, '#FFF6E0'], [26, '#FF4D5E'], [6, '#FFF6E0']].forEach(([rad, c]) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(HX, HY, rad, 0, 7); ctx.fill(); });
+        ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(0, SY + 22, CW, 3);
+        const gl = cache.gl;
+        pos.forEach((p, i) => {
+          if(p[2] || !gl[i]) return;
+          ctx.fillStyle = gl[i].side === 'A' ? '#FF4D5E' : '#3B82F6'; ctx.beginPath(); ctx.arc(p[0], p[1], GR, 0, 7); ctx.fill();
+          ctx.fillStyle = '#FFF6E0'; ctx.beginPath(); ctx.arc(p[0], p[1], GR * 0.55, 0, 7); ctx.fill();
+          ctx.fillStyle = '#141B33'; ctx.font = '700 10px Rubik, sans-serif'; ctx.textAlign = 'center'; ctx.fillText((nameOf(gl[i].id) || '?')[0], p[0], p[1] + 3.5);
+        });
+        const cur = R.cur || 0, who = order[cur];
+        if(who && !shots[cur] && !R.done){
+          ctx.globalAlpha = 0.6; ctx.fillStyle = who.side === 'A' ? '#FF4D5E' : '#3B82F6'; ctx.beginPath(); ctx.arc(SX, SY, GR, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+          const left = Math.max(0, Math.ceil(10 - (now() - (R.turnAt || 0)) / 1000));
+          $('#cuMsg').innerHTML = who.id === pid ? `🥌 Du bist dran! Wisch nach oben. (${left} s)` : `🥌 ${nm(who.id)} (${who.side === 'A' ? 'Rot' : 'Blau'}) ist dran … ${left} s`;
+        } else if(who && shots[cur]) $('#cuMsg').innerHTML = `🥌 ${nm(who.id)} schiebt …`;
+        const sc = curlScore(cache.gl.map((g, i) => ({ ...g, x: pos[i] ? pos[i][0] : g.x, y: pos[i] ? pos[i][1] : g.y, off: pos[i] ? pos[i][2] : g.off })));
+        ctx.fillStyle = '#FFF6E0'; ctx.font = '600 13px Rubik, sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(sc ? (sc.side === 'A' ? 'Rot' : 'Blau') + ' führt mit ' + sc.pts : 'Noch keiner im Kreis', CW / 2, CH - 12);
+      };
+      loop(() => draw());
+      const myTurn = () => { const R = room.round, w = order[R.cur || 0]; return w && w.id === pid && !curlShots(R)[R.cur || 0] && !R.pending; };
+      cv.addEventListener('pointerdown', e => { e.preventDefault(); if(!myTurn()) return; dragging = true; track = [{ x: e.clientX, y: e.clientY, t: performance.now() }]; try{ cv.setPointerCapture(e.pointerId); }catch(_){} });
+      cv.addEventListener('pointermove', e => { if(dragging) track.push({ x: e.clientX, y: e.clientY, t: performance.now() }); });
+      const up = () => {
+        if(!dragging) return; dragging = false;
+        const tn = performance.now(), recent = track.filter(p => tn - p.t < 120), a = recent[0] || track[0], b = track[track.length - 1];
+        const dt = Math.max(16, b.t - a.t), vx = (b.x - a.x) / dt / s * 5, vy = (b.y - a.y) / dt / s * 5;
+        if(vy > -0.5 || !myTurn()) return;
+        const m = Math.hypot(vx, vy), k = m > 13 ? 13 / m : 1;
+        roomRef.child('round/pending').set({ vx: Math.round(vx * k * 1000) / 1000, vy: Math.round(vy * k * 1000) / 1000, by: pid });
+      };
+      cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+    },
+    eval(rows, r){
+      const sim = curlSim(curlShots(r), curlShots(r).length, false), sc = curlScore(sim.gl), T2 = teamsOf(r);
+      if(!sc) return { base: {}, rows: [], note: 'Kein Glas im Zielkreis – keiner trinkt' };
+      const lose = sc.side === 'A' ? 'B' : 'A', base = {};
+      T2[lose].forEach(id => base[id] = sc.pts);
+      return { base, rows: [], noDouble: true, note: `${sc.side === 'A' ? 'Team Rot' : 'Team Blau'} holt ${sc.pts} ${sc.pts === 1 ? 'Punkt' : 'Punkte'}` };
+    }
+  }
+});
+
+/* Host-Logik der neuen Spiele */
+let retteFirstOk = {};
+function hostSpecial(r, t){
+  const P = room.players || {};
+  if(r.game === 'rette'){
+    if(!r.remaining){ retteFirstOk = {}; roomRef.child('round').update({ step: 0, remaining: Object.keys(r.parts || {}), saved: [], stepAt: r.startAt }); return true; }
+    if(r.remaining.length <= 1 || Object.keys(r.parts || {}).length < 2){ hostBusy = true; evaluate().finally(() => hostBusy = false); return true; }
+    if(t < (r.stepAt || 0)) return true;
+    const step = r.step || 0, A = ((room.answers && room.answers['r' + r.n]) || {})['s' + step] || {};
+    const oks = Object.entries(A).filter(([id, a]) => a.ok && r.remaining.includes(id)).sort((a, b) => a[1].t - b[1].t);
+    if(oks.length){
+      if(!retteFirstOk[step]){ retteFirstOk[step] = t; return true; }
+      if(t < retteFirstOk[step] + 450) return true;
+      const w = oks[0][0];
+      hostBusy = true;
+      roomRef.child('round').update({ remaining: r.remaining.filter(id => id !== w), saved: (r.saved || []).concat(w), step: step + 1, stepAt: t + 1800, lastMsg: '🎉 ' + nameOf(w) + ' ist gerettet!' }).finally(() => hostBusy = false);
+      return true;
+    }
+    if(r.remaining.every(id => A[id]) || t > r.stepAt + 12000){
+      hostBusy = true;
+      roomRef.child('round').update({ step: step + 1, stepAt: t + 1500, lastMsg: 'Keiner lag richtig – neuer Gegenstand!' }).finally(() => hostBusy = false);
+    }
+    return true;
+  }
+  if(r.game === 'schiffe'){
+    const T2 = teamsOf(r);
+    if(!T2.B.length){ hostBusy = true; evaluate().finally(() => hostBusy = false); return true; }
+    if(!r.sub){ if(Object.keys(r.parts || {}).every(id => (r.ships || {})[id] != null)) shipsGo(true); return true; }
+    if(r.over){ if(t >= (r.overAt || 0) + 2500){ hostBusy = true; evaluate().finally(() => hostBusy = false); } return true; }
+    if(t < (r.turnAt || 0)) return true;
+    const sh = shipShooter(r), pend = r.pending;
+    if(pend && pend.by !== sh.id){ roomRef.child('round/pending').set(null); return true; }
+    if(!pend && t < (r.turnAt || 0) + 10000) return true;
+    const shots = shipShots(r), done = shots.filter(s => s.team === sh.target).map(s => s.cell);
+    let cell = pend ? pend.cell : null;
+    if(cell === null || done.includes(cell)){ const free = [...Array(16).keys()].filter(c => !done.includes(c)); cell = free[Math.floor(Math.random() * free.length)]; }
+    const ships = r.ships || {};
+    const hit = T2[sh.target].filter(id => ships[id] === cell);
+    const allCells = done.concat(cell);
+    const alive = T2[sh.target].filter(id => ships[id] != null && !allCells.includes(ships[id]));
+    const up = {};
+    up['shots/k' + shots.length] = { cell, team: sh.target, by: sh.id, hit };
+    up.pending = null; up.turn = (r.turn || 0) + 1; up.turnAt = t + 1500;
+    up.lastMsg = hit.length ? `💥 Treffer von ${nameOf(sh.id)}! ${hit.map(nameOf).join(' & ')} ${hit.length > 1 ? 'trinken' : 'trinkt'} 1!` : `💦 ${nameOf(sh.id)} schießt daneben${pend ? '' : ' (Zufallsschuss)'}`;
+    if(!alive.length){ up.over = sh.target; up.overAt = t; }
+    hostBusy = true; roomRef.child('round').update(up).finally(() => hostBusy = false);
+    return true;
+  }
+  if(r.game === 'curling'){
+    const order = curlOrder(r), T2 = teamsOf(r);
+    if(!T2.B.length){ hostBusy = true; evaluate().finally(() => hostBusy = false); return true; }
+    if(r.cur == null){ roomRef.child('round').update({ cur: 0, turnAt: r.startAt }); return true; }
+    const cur = r.cur, shots = curlShots(r);
+    if(cur >= order.length){ hostBusy = true; evaluate().finally(() => hostBusy = false); return true; }
+    if(shots[cur]){
+      const sim = curlSim(shots, cur + 1, true);
+      if(t >= shots[cur].at + sim.frames.length * 16 + 1200){ hostBusy = true; roomRef.child('round').update({ cur: cur + 1, turnAt: t, pending: null }).finally(() => hostBusy = false); }
+      return true;
+    }
+    const pend = r.pending, who = order[cur];
+    if(pend && pend.by !== who.id){ roomRef.child('round/pending').set(null); return true; }
+    if(pend || t >= (r.turnAt || 0) + 10000){
+      const shot = pend ? { vx: pend.vx, vy: pend.vy } : { vx: Math.round((Math.random() - .5) * 1200) / 1000, vy: -Math.round((5.5 + Math.random() * 2.5) * 1000) / 1000 };
+      hostBusy = true;
+      roomRef.child('round').update({ ['shots/k' + cur]: { ...shot, side: who.side, id: who.id, at: Math.round(t + 300) }, pending: null }).finally(() => hostBusy = false);
+    }
+    return true;
+  }
+  return false;
+}
+function shipsGo(auto){
+  const r = room.round; if(!r || r.game !== 'schiffe' || r.sub) return;
+  if(!auto && !confirm('Jetzt losschießen? Wer noch kein Boot gesetzt hat, spielt ohne Boot mit.')) return;
+  const T2 = teamsOf(r), ships = r.ships || {};
+  const up = { sub: 'battle', first: Math.random() < .5 ? 'A' : 'B', turn: 0, turnAt: now() + 1500, lastMsg: 'Alle Boote gesetzt – Feuer frei!' };
+  ['A', 'B'].forEach(s => { if(!T2[s].some(id => ships[id] != null)){ up.over = s; up.overAt = now(); up.lastMsg = (s === 'A' ? 'Team Rot' : 'Team Blau') + ' hat gar kein Boot gesetzt!'; } });
+  roomRef.child('round').update(up);
+}
+
+</script>
+</body>
+</html>
